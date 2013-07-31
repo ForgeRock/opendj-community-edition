@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2012 ForgeRock AS
+ *      Portions Copyright 2012-2013 ForgeRock AS
  */
 
 package org.opends.server.authorization.dseecompat;
@@ -401,8 +401,8 @@ public class TargetAttrTestCase extends AciTestCase {
         { "!=", "cn || sn", "sn", false },
         { "!=", "cn", "sn", true }, // Not eq user attr
         { "!=", "cn || sn", "description", true }, // Not eq user attr
-        { "!=", "cn || sn", "modifytimestamp", true }, // Not eq op attr
-        { "!=", "aci", "cn", true },
+        { "!=", "cn || sn", "modifytimestamp", false }, // Not eq op attr
+        { "!=", "aci", "cn", false },
         { "!=", "aci", "modifytimestamp", true },
     };
   }
