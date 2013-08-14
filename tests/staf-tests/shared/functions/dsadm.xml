@@ -99,11 +99,35 @@
       <script>
         STAFCmdParamsList=[]
         STAFCmdParams=''
+      </script>
+      
+      <!-- Check if 'Legal/license_to_accept.txt' exists -->
+      <call function="'GetEntry'">
+        {
+        'location'  : location ,
+        'entry'     : '%s/Legal/license_to_accept.txt' % dsPath ,
+        'attribute' : 'TYPE'
+        }
+      </call>
+      <if expr="RC != 48">
+        <!-- 'Legal/license_to_accept.txt' exists so add 'acceptLicense' option -->
+        <script>
+          STAFCmdParamsList.append('--acceptLicense')
+        </script>
+      </if>
 
+      <if expr="UPGRADE_OPENDJNAME == 'OpenDJ-2.5.0-Xpress1'">
+        <!-- Upgrade from 'OpenDJ-2.5.0-Xpress1' so add 'force' option -->
+        <script>
+          STAFCmdParamsList.append('--force')
+        </script>
+      </if>
+
+      <script>
         if dsPath:
-          STAFCmd='%s/upgrade%s' % (dsPath,fileExt) 
+          STAFCmd='%s/upgrade%s' % (dsPath,fileExt)
           STAFCmdParamsList.append('-n')
-                  
+          
         if dsHelp:
           STAFCmdParamsList.append('-H')
 
@@ -240,13 +264,68 @@
     <sequence>
     
       <!-- Build the Command -->
+      
+      <!-- Get the information about the server -->
+      <call function="'GetVar'">
+        { 'location'  : dsHost,
+          'type'      : 'shared',
+          'variable'  : 'Job%s_ServerInfo' % STAXParentID
+        }
+      </call>
+
+      <if expr="RC != 0">
+        <script>
+          STAFResult='{}'
+        </script>
+      </if>
+
       <script>
+        jobInfo=eval(STAFResult)
+        instPath = '%s/%s' % (DIRECTORY_INSTANCE_BIN,OPENDSNAME)
+        if jobInfo.has_key(instPath):
+          serverInformation=jobInfo[instPath]
+          dsVersion=serverInformation['server version']
+        else:
+          dsVersion='unknown'
+                
         STAFCmdParamsList=[]
         STAFCmdParams=''
+      </script>
 
+      <!-- Check if 'Legal/license_to_accept.txt' exists -->
+      <call function="'GetEntry'">
+        {
+        'location'  : location ,
+        'entry'     : '%s/Legal/license_to_accept.txt' % dsPath ,
+        'attribute' : 'TYPE'
+        }
+      </call>
+      <if expr="RC != 48">
+        <!-- 'Legal/license_to_accept.txt' exists -->
+        <if expr="UPGRADE_OPENDJNAME != ''">
+          <!-- UPGRADE MODE -->
+          <if expr="UPGRADE_OPENDJNAME >= 'OpenDJ-2.5.0' and UPGRADE_OPENDJNAME != 'OpenDJ-2.5.0-Xpress1'">
+            <!--Upgrade from a version >= '2.5.0' so add 'acceptLicense' option -->
+            <script>
+              STAFCmdParamsList.append('--acceptLicense')
+            </script>
+          </if>
+          <else>
+            <!-- STANDARD MODE -->
+            <if expr="dsVersion >= '2.5.0' and dsVersion != '2.5.0-Xpress1'">
+              <!-- Install a fresh version >= '2.5.0' so add 'acceptLicense' option -->
+              <script>
+                STAFCmdParamsList.append('--acceptLicense')
+              </script>
+            </if>
+          </else>
+        </if>
+      </if>
+
+      <script>
         if dsPath:
           STAFCmd='%s/setup%s' % (dsPath,fileExt)
-          STAFCmdParamsList.append('--cli')    
+          STAFCmdParamsList.append('--cli')
           STAFCmdParamsList.append('-n')    
 
         if dsHost:
