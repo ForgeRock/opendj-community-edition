@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011 ForgeRock AS.
+ *      Portions copyright 2011-2013 ForgeRock AS.
  */
 package org.opends.server.core.networkgroups;
 
@@ -62,10 +62,10 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
-
 /**
  * This set of tests test the network groups.
  */
+@SuppressWarnings("javadoc")
 public class NetworkGroupTest extends DirectoryServerTestCase {
   //===========================================================================
   //
@@ -79,8 +79,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
    * @throws Exception if the environment could not be set up.
    */
   @BeforeClass
-  public void setUp()
-    throws Exception
+  public void setUp() throws Exception
   {
     // This test suite depends on having the schema available,
     // so we'll start the server.
@@ -102,8 +101,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
 
    */
   @DataProvider (name = "DNSet_0")
-  public Object[][] initDNSet_0()
-    throws Exception
+  public Object[][] initDNSet_0() throws Exception
   {
     // Network group ID
     String networkGroupID1 = "networkGroup1";
@@ -123,8 +121,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
     }
 
     // Network group info
-    Object[][] myData =
-    {
+    return new Object[][] {
         // Test1: create a network group with the identifier networkGroupID1
         { networkGroupID1, dn1 },
 
@@ -135,8 +132,6 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
         // Test3: create another network group
         { networkGroupID2, dn2 },
     };
-
-    return myData;
   }
 
 
@@ -157,8 +152,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
    * @throws Exception  when DN.decode fails
    */
   @DataProvider(name = "DNSet_1")
-  public Object[][] initDNSet_1()
-    throws Exception
+  public Object[][] initDNSet_1() throws Exception
   {
     DN dnRootDSE = null;
     DN dnConfig  = null;
@@ -197,8 +191,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
     }
 
     // Sets of DNs
-    Object[][] myData =
-    {
+    return new Object[][] {
         { dnRootDSE,  null,                 true,  true,  true },
         { dnConfig,   dnSubordinateConfig,  true,  true,  true },
         { dnMonitor,  dnSubordinateMonitor, true,  true,  true },
@@ -207,8 +200,6 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
         { dnBackups,  null,                 true,  true,  true },
         { dnDummy,    null,                 false, false, false },
     };
-
-    return myData;
   }
 
 
@@ -228,8 +219,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
 
    */
   @DataProvider (name = "DNSet_2")
-  public Object[][] initDNSet_2()
-    throws Exception
+  public Object[][] initDNSet_2() throws Exception
   {
     // Network group definition
     DN     dn1          = null;
@@ -255,41 +245,26 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
     }
 
     // Network group info
-    Object[][] myData =
-    {
+    return new Object[][] {
         // Test1: one DN for one workflow
         {
-          dn1,
-          null,
-          null,
-          subordinate1,
-          null,
-          null,
+          dn1, null, null,
+          subordinate1, null, null,
           unrelatedDN
         },
         // Test2: two DNs for two workflows
         {
-          dn1,
-          dn2,
-          null,
-          subordinate1,
-          subordinate2,
-          null,
+          dn1, dn2, null,
+          subordinate1, subordinate2, null,
           unrelatedDN
         },
         // Test3: three DNs for three workflows
         {
-          dn1,
-          dn2,
-          dn3,
-          subordinate1,
-          subordinate2,
-          subordinate3,
+          dn1, dn2, dn3,
+          subordinate1, subordinate2, subordinate3,
           unrelatedDN
         }
     };
-
-    return myData;
   }
 
 
@@ -297,8 +272,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
    * Provides information to create a network group with resource limits.
    */
   @DataProvider (name = "DNSet_3")
-  public Object[][] initDNSet_3()
-    throws Exception
+  public Object[][] initDNSet_3() throws Exception
   {
     // Network group definition
     String networkGroupID = "networkGroup1";
@@ -324,8 +298,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
     }
 
     // Network group info
-    Object[][] myData =
-    {
+    return new Object[][] {
         // Test1: one DN for one workflow
         {
           networkGroupID,
@@ -340,7 +313,6 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
           minSubstringLength
         }
     };
-    return myData;
   }
 
 
@@ -348,8 +320,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
    * Provides information to create 2 network groups with different priorities.
    */
   @DataProvider (name = "DNSet_4")
-  public Object[][] initDNSet_4()
-    throws Exception
+  public Object[][] initDNSet_4() throws Exception
   {
     String networkGroupID1 = "group1";
     String networkGroupID2 = "group2";
@@ -362,27 +333,17 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
     } catch (DirectoryException de) {
       throw de;
     }
-    Object[][] myData = {
+    return new Object[][] {
       {
-        networkGroupID1,
-        dn1,
-        1,
-        networkGroupID2,
-        dn2,
-        2
+        networkGroupID1, dn1, 1,
+        networkGroupID2, dn2, 2
       },
       {
-        networkGroupID1,
-        dn1,
-        2,
-        networkGroupID2,
-        dn2,
-        1
+        networkGroupID1, dn1, 2,
+        networkGroupID2, dn2, 1
       }
 
     };
-
-    return myData;
   }
 
 
@@ -392,7 +353,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
   @DataProvider (name = "PrioritySet_0")
   public Object[][] initPrioritySet_0()
   {
-    Object[][] myData = {
+    return new Object[][] {
       { 1, 2, 3 },
       { 1, 3, 2 },
       { 2, 1, 3 },
@@ -400,8 +361,6 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
       { 3, 1, 2 },
       { 3, 2, 1 }
     };
-
-    return myData;
   }
 
 
@@ -414,33 +373,14 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
   @DataProvider (name = "BindFilterSet_0")
   public Object[][] initBindFilterSet_0()
   {
-    Object[][] myData = {
-      {
-        "*, cn=Root DNs, cn=config",
-        true
-      },
-      {
-        "cn=Dir*, cn=Root DNs, cn=config",
-        true
-      },
-      {
-        "cn=*",
-        false
-      },
-      {
-        "uid=*",
-        false
-      },
-      {
-        "**, cn=config",
-        true
-      },
-      {
-        "*, cn=config",
-        false
-      }
+    return new Object[][] {
+      { "*, cn=Root DNs, cn=config", true },
+      { "cn=Dir*, cn=Root DNs, cn=config", true },
+      { "cn=*", false },
+      { "uid=*", false },
+      { "**, cn=config", true },
+      { "*, cn=config", false }
     };
-    return myData;
   }
 
 
@@ -1020,16 +960,14 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
     // Use simple bind on this connection
     Entry userEntry = DirectoryServer.getEntry(
             DN.decode("cn=Directory Manager, cn=Root DNs, cn=config"));
-    ByteString password = ByteString.valueOf("password");
     ClientConnection connection2 = new InternalClientConnection(
-          new AuthenticationInfo(userEntry, userEntry.getDN(), password, true));
+          new AuthenticationInfo(userEntry, userEntry.getDN(), true));
     ng = NetworkGroup.findMatchingNetworkGroup(connection2);
     assertEquals(ng, networkGroup2);
 
     // Use SASL on this connection
     ClientConnection connection3 = new InternalClientConnection(
-            new AuthenticationInfo(userEntry, "external", ByteString.valueOf(
-                "cn=Directory Manager, cn=Root DNs, cn=config"), true));
+            new AuthenticationInfo(userEntry, "external", true));
     ng = NetworkGroup.findMatchingNetworkGroup(connection3);
     assertEquals(ng, networkGroup3);
 
@@ -1072,9 +1010,8 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
     // Use simple bind on this connection
     Entry userEntry = DirectoryServer.getEntry(
             DN.decode("cn=Directory Manager, cn=Root DNs, cn=config"));
-    ByteString password = ByteString.valueOf("password");
     ClientConnection connection2 = new InternalClientConnection(
-          new AuthenticationInfo(userEntry, userEntry.getDN(), password, true));
+          new AuthenticationInfo(userEntry, userEntry.getDN(), true));
     ng = NetworkGroup.findMatchingNetworkGroup(connection2);
     if (match) {
       assertEquals(ng, networkGroup);
@@ -1084,8 +1021,7 @@ public class NetworkGroupTest extends DirectoryServerTestCase {
 
     // Use SASL on this connection
     ClientConnection connection3 = new InternalClientConnection(
-            new AuthenticationInfo(userEntry, "external", ByteString.valueOf(
-                "cn=Directory Manager, cn=Root DNs, cn=config"), true));
+            new AuthenticationInfo(userEntry, "external", true));
     ng = NetworkGroup.findMatchingNetworkGroup(connection3);
     if (match) {
       assertEquals(ng, networkGroup);

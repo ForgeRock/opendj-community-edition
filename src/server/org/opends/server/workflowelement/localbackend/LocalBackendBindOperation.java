@@ -546,7 +546,7 @@ public class LocalBackendBindOperation
                 ERR_BIND_REJECTED_LOCKDOWN_MODE.get());
           }
           setAuthenticationInfo(new AuthenticationInfo(userEntry, getBindDN(),
-              simplePassword, DirectoryServer.isRootDN(userEntry.getDN())));
+              DirectoryServer.isRootDN(userEntry.getDN())));
 
           // Set resource limits for the authenticated user.
           setResourceLimits(userEntry);
@@ -616,7 +616,7 @@ public class LocalBackendBindOperation
                 ERR_BIND_REJECTED_LOCKDOWN_MODE.get());
           }
           setAuthenticationInfo(new AuthenticationInfo(userEntry, getBindDN(),
-              simplePassword, DirectoryServer.isRootDN(userEntry.getDN())));
+              DirectoryServer.isRootDN(userEntry.getDN())));
 
           // Set resource limits for the authenticated user.
           setResourceLimits(userEntry);
