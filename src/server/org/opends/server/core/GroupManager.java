@@ -811,16 +811,7 @@ public class GroupManager extends InternalDirectoryServerPlugin
         }
       }
     }
-    lock.writeLock().lock();
-    try
-    {
-      createAndRegisterGroup(entry);
-      refreshToken++;
-    }
-    finally
-    {
-      lock.writeLock().unlock();
-    }
+    createAndRegisterGroup(entry);
   }
 
 
@@ -846,8 +837,10 @@ public class GroupManager extends InternalDirectoryServerPlugin
     lock.writeLock().lock();
     try
     {
-      groupInstances.removeSubtree(entry.getDN(), null);
-      refreshToken++;
+      if (groupInstances.removeSubtree(entry.getDN(), null))
+      {
+        refreshToken++;
+      }
     }
     finally
     {
@@ -878,6 +871,21 @@ public class GroupManager extends InternalDirectoryServerPlugin
       }
     }
 
+    lock.readLock().lock();
+    try
+    {
+      if (!groupInstances.containsKey(oldEntry.getDN()))
+      {
+        // If the modified entry is not in any group instance, it's probably
+        // not a group, exit fast
+        return;
+      }
+    }
+    finally
+    {
+      lock.readLock().unlock();
+    }
+
     lock.writeLock().lock();
     try
     {
@@ -889,7 +897,6 @@ public class GroupManager extends InternalDirectoryServerPlugin
           groupInstances.remove(oldEntry.getDN());
         }
         createAndRegisterGroup(newEntry);
-        refreshToken++;
       }
     }
     finally
@@ -955,7 +962,10 @@ public class GroupManager extends InternalDirectoryServerPlugin
         group.setGroupDN(groupDN);
         groupInstances.put(groupDN, group);
       }
-      refreshToken++;
+      if (!groupSet.isEmpty())
+      {
+        refreshToken++;
+      }
     }
     finally
     {
@@ -1122,6 +1132,7 @@ public class GroupManager extends InternalDirectoryServerPlugin
           try
           {
             groupInstances.put(entry.getDN(), groupInstance);
+            refreshToken++;
           }
           finally
           {
