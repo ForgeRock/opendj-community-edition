@@ -1919,8 +1919,9 @@ public final class ReplicationServer
     {
       // The database was empty, just keep increasing numbers since last time
       // we generated one DraftCN.
-      firstDraftCN += lastGeneratedDraftCN;
-      lastDraftCN += lastGeneratedDraftCN;
+      long tmpLastGeneratedDraftCN = lastGeneratedDraftCN;
+      firstDraftCN += tmpLastGeneratedDraftCN;
+      lastDraftCN += tmpLastGeneratedDraftCN;
     }
     return new int[]{firstDraftCN, lastDraftCN};
   }
