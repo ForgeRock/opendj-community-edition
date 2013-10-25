@@ -4600,16 +4600,18 @@ public final class StaticUtils
         return false;
       }
 
-      while (i.hasMoreElements())
-      {
-        NetworkInterface n = i.nextElement();
-        Enumeration<InetAddress> j = n.getInetAddresses();
-        while (j.hasMoreElements())
+      if (i != null) {
+        while (i.hasMoreElements())
         {
-          InetAddress localAddress = j.nextElement();
-          if (localAddress.equals(address))
+          NetworkInterface n = i.nextElement();
+          Enumeration<InetAddress> j = n.getInetAddresses();
+          while (j.hasMoreElements())
           {
-            return true;
+            InetAddress localAddress = j.nextElement();
+            if (localAddress.equals(address))
+            {
+              return true;
+            }
           }
         }
       }
