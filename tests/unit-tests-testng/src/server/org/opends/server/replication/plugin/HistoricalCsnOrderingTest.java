@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2012 ForgeRock AS
+ *      Portions Copyright 2011-2013 ForgeRock AS
  */
 package org.opends.server.replication.plugin;
 
@@ -41,6 +41,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opends.messages.Category;
 import org.opends.messages.Message;
@@ -100,8 +101,7 @@ public class HistoricalCsnOrderingTest
    * Check the basic comparator on the HistoricalCsnOrderingMatchingRule
    */
   @Test()
-  public void basicRuleTest()
-  throws Exception
+  public void basicRuleTest() throws Exception
   {
     // Creates a rule
     HistoricalCsnOrderingMatchingRule r =
@@ -110,17 +110,12 @@ public class HistoricalCsnOrderingTest
     ChangeNumber del1 = new ChangeNumber(1,  0,  1);
     ChangeNumber del2 = new ChangeNumber(1,  1,  1);
 
-    ByteString v1 = ByteString.valueOf("a"+":"+del1.toString());
-    ByteString v2 = ByteString.valueOf("a"+":"+del2.toString());
+    ByteString v1 = ByteString.valueOf("a" + ":" + del1);
+    ByteString v2 = ByteString.valueOf("a" + ":" + del2);
 
-    int cmp = r.compareValues(v1, v1);
-    assertTrue(cmp == 0);
-
-    cmp = r.compareValues(v1, v2);
-    assertTrue(cmp == -1);
-
-    cmp = r.compareValues(v2, v1);
-    assertTrue(cmp == 1);
+    assertEquals(r.compareValues(v1, v1), 0);
+    assertEquals(r.compareValues(v1, v2), -1);
+    assertEquals(r.compareValues(v2, v1), 1);
   }
 
   /**
@@ -129,11 +124,10 @@ public class HistoricalCsnOrderingTest
    * informations.
    */
   @Test()
-  public void buildAndPublishMissingChangesOneEntryTest()
-  throws Exception
+  public void buildAndPublishMissingChangesOneEntryTest() throws Exception
   {
     final int serverId = 123;
-    final DN baseDn = DN.decode(TEST_ROOT_DN_STRING);
+    final DN baseDN = DN.decode(TEST_ROOT_DN_STRING);
     TestCaseUtils.initializeTestBackend(true);
     ReplicationServer rs = createReplicationServer();
     // Create Replication Server and Domain
@@ -142,7 +136,7 @@ public class HistoricalCsnOrderingTest
     try
     {
       long startTime = TimeThread.getTime();
-    final DN dn1 = DN.decode("cn=test1," + baseDn.toString());
+      final DN dn1 = DN.decode("cn=test1," + baseDN);
     final AttributeType histType =
       DirectoryServer.getAttributeType(EntryHistorical.HISTORICAL_ATTRIBUTE_NAME);
 
@@ -151,7 +145,7 @@ public class HistoricalCsnOrderingTest
 
     // Add the first test entry.
     TestCaseUtils.addEntry(
-        "dn: cn=test1," + baseDn.toString(),
+        "dn: cn=test1," + baseDN,
         "displayname: Test1",
         "objectClass: top",
         "objectClass: person",
@@ -163,10 +157,10 @@ public class HistoricalCsnOrderingTest
 
     // Perform a first modification to update the historical attribute
     int resultCode = TestCaseUtils.applyModifications(false,
-        "dn: cn=test1," + baseDn.toString(),
+        "dn: cn=test1," + baseDN,
         "changetype: modify",
         "add: description",
-    "description: foo");
+        "description: foo");
     assertEquals(resultCode, 0);
 
     // Read the entry back to get its historical and included changeNumber
@@ -185,10 +179,10 @@ public class HistoricalCsnOrderingTest
     // Perform a 2nd modification to update the hist attribute with
     // a second value
     resultCode = TestCaseUtils.applyModifications(false,
-        "dn: cn=test1," + baseDn.toString(),
+        "dn: cn=test1," + baseDN,
         "changetype: modify",
         "add: description",
-    "description: bar");
+        "description: bar");
     assertEquals(resultCode, 0);
 
     Entry entry2 = DirectoryServer.getEntry(dn1);
@@ -199,16 +193,14 @@ public class HistoricalCsnOrderingTest
 
     for (AttributeValue av : attrs2.get(0)) {
       logError(Message.raw(Category.SYNC, Severity.INFORMATION,
-          "Second historical value:" + av.getValue().toString()));
+          "Second historical value:" + av.getValue()));
     }
 
     LinkedList<ReplicationMsg> opList = new LinkedList<ReplicationMsg>();
     TestBroker session = new TestBroker(opList);
 
-    boolean result =
-      rd1.buildAndPublishMissingChanges(
-          new ChangeNumber(startTime, 0, serverId),
-          session);
+      ChangeNumber cn = new ChangeNumber(startTime, 0, serverId);
+      boolean result = rd1.buildAndPublishMissingChanges(cn, session, new AtomicBoolean());
     assertTrue(result, "buildAndPublishMissingChanges has failed");
     assertEquals(opList.size(), 3, "buildAndPublishMissingChanges should return 3 operations");
     assertTrue(opList.getFirst().getClass().equals(AddMsg.class));
@@ -222,17 +214,14 @@ public class HistoricalCsnOrderingTest
     opList = new LinkedList<ReplicationMsg>();
     session = new TestBroker(opList);
 
-    result =
-      rd1.buildAndPublishMissingChanges(
-          fromChangeNumber,
-          session);
+      result = rd1.buildAndPublishMissingChanges(fromChangeNumber, session, new AtomicBoolean());
     assertTrue(result, "buildAndPublishMissingChanges has failed");
     assertEquals(opList.size(), 1, "buildAndPublishMissingChanges should return 1 operation");
     assertTrue(opList.getFirst().getClass().equals(ModifyMsg.class));
     }
     finally
     {
-      MultimasterReplication.deleteDomain(baseDn);
+      MultimasterReplication.deleteDomain(baseDN);
       rs.remove();
       StaticUtils.recursiveDelete(new File(DirectoryServer.getInstanceRoot(),
                  rs.getDbDirName()));
@@ -245,10 +234,9 @@ public class HistoricalCsnOrderingTest
    * informations.
    */
   @Test()
-  public void buildAndPublishMissingChangesSeveralEntriesTest()
-  throws Exception
+  public void buildAndPublishMissingChangesSeveralEntriesTest() throws Exception
   {
-    final DN baseDn = DN.decode(TEST_ROOT_DN_STRING);
+    final DN baseDN = DN.decode(TEST_ROOT_DN_STRING);
     TestCaseUtils.initializeTestBackend(true);
     ReplicationServer rs = createReplicationServer();
     // Create Replication Server and Domain
@@ -261,9 +249,9 @@ public class HistoricalCsnOrderingTest
     "Starting replication test : changesCmpTest"));
 
     // Add 3 entries.
-    String dnTest1 = "cn=test1," + baseDn.toString();
-    String dnTest2 = "cn=test2," + baseDn.toString();
-    String dnTest3 = "cn=test3," + baseDn.toString();
+    String dnTest1 = "cn=test1," + baseDN;
+    String dnTest2 = "cn=test2," + baseDN;
+    String dnTest3 = "cn=test3," + baseDN;
     TestCaseUtils.addEntry(
         "dn: " + dnTest3,
         "displayname: Test1",
@@ -298,26 +286,24 @@ public class HistoricalCsnOrderingTest
 
     // Perform modifications on the 2 entries
     int resultCode = TestCaseUtils.applyModifications(false,
-        "dn: cn=test2," + baseDn.toString(),
+        "dn: cn=test2," + baseDN,
         "changetype: modify",
         "add: description",
-    "description: foo");
+        "description: foo");
     resultCode = TestCaseUtils.applyModifications(false,
-        "dn: cn=test1," + baseDn.toString(),
+        "dn: cn=test1," + baseDN,
         "changetype: modify",
         "add: description",
-    "description: foo");
+        "description: foo");
     assertEquals(resultCode, 0);
 
     LinkedList<ReplicationMsg> opList = new LinkedList<ReplicationMsg>();
     TestBroker session = new TestBroker(opList);
 
-    // Call the buildAndPublishMissingChanges and check that this method
-    // correctly generates the 4 operations in the correct order.
-    boolean result =
-      rd1.buildAndPublishMissingChanges(
-          new ChangeNumber(startTime, 0, serverId),
-          session);
+      // Call the buildAndPublishMissingChanges and check that this method
+      // correctly generates the 4 operations in the correct order.
+      ChangeNumber cn = new ChangeNumber(startTime, 0, serverId);
+      boolean result = rd1.buildAndPublishMissingChanges(cn, session, new AtomicBoolean());
     assertTrue(result, "buildAndPublishMissingChanges has failed");
     assertEquals(opList.size(), 5, "buildAndPublishMissingChanges should return 5 operations");
     ReplicationMsg msg = opList.removeFirst();
@@ -338,7 +324,7 @@ public class HistoricalCsnOrderingTest
     }
     finally
     {
-      MultimasterReplication.deleteDomain(baseDn);
+      MultimasterReplication.deleteDomain(baseDN);
       rs.remove();
     }
   }
@@ -373,14 +359,13 @@ public class HistoricalCsnOrderingTest
   private LDAPReplicationDomain createReplicationDomain(int dsId)
           throws DirectoryException, ConfigException
   {
-    DN baseDn = DN.decode(TEST_ROOT_DN_STRING);
+    DN baseDN = DN.decode(TEST_ROOT_DN_STRING);
     DomainFakeCfg domainConf =
-      new DomainFakeCfg(baseDn, dsId, replServers, AssuredType.NOT_ASSURED,
+      new DomainFakeCfg(baseDN, dsId, replServers, AssuredType.NOT_ASSURED,
       2, 1, 0, null);
     LDAPReplicationDomain replicationDomain =
       MultimasterReplication.createNewDomain(domainConf);
     replicationDomain.start();
-
     return replicationDomain;
   }
 }

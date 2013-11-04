@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.DataFormatException;
 
 import org.opends.messages.Category;
@@ -192,6 +193,8 @@ public final class LDAPReplicationDomain extends ReplicationDomain
    * is not updated too early.
    */
   private final PendingChanges pendingChanges;
+  private final AtomicReference<RSUpdater> rsUpdater =
+      new AtomicReference<RSUpdater>(null);
 
   /**
    * It contain the updates that were done on other servers, transmitted
@@ -360,7 +363,7 @@ public final class LDAPReplicationDomain extends ReplicationDomain
    * The thread that periodically saves the ServerState of this
    * LDAPReplicationDomain in the database.
    */
-  private class  ServerStateFlush extends DirectoryThread
+  private class ServerStateFlush extends DirectoryThread
   {
     protected ServerStateFlush()
     {
@@ -377,7 +380,7 @@ public final class LDAPReplicationDomain extends ReplicationDomain
     {
       done = false;
 
-      while (!shutdown)
+      while (!isShutdownInitiated())
       {
         try
         {
@@ -394,6 +397,7 @@ public final class LDAPReplicationDomain extends ReplicationDomain
         catch (InterruptedException e)
         {
           // Thread interrupted: check for shutdown.
+          Thread.currentThread().interrupt();
         }
       }
       state.save();
@@ -409,6 +413,11 @@ public final class LDAPReplicationDomain extends ReplicationDomain
   private class RSUpdater extends DirectoryThread
   {
     private final ChangeNumber startChangeNumber;
+    /**
+     * Used to communicate that the current thread computation needs to
+     * shutdown.
+     */
+    private AtomicBoolean shutdown = new AtomicBoolean(false);
 
 
 
@@ -437,7 +446,7 @@ public final class LDAPReplicationDomain extends ReplicationDomain
        */
       try
       {
-        if (buildAndPublishMissingChanges(startChangeNumber, broker))
+        if (buildAndPublishMissingChanges(startChangeNumber, broker, shutdown))
         {
           message = DEBUG_CHANGES_SENT.get();
           logError(message);
@@ -475,7 +484,18 @@ public final class LDAPReplicationDomain extends ReplicationDomain
       finally
       {
         broker.setRecoveryRequired(false);
+        // RSUpdater thread has finished its work, let's remove it from memory
+        // so another RSUpdater thread can be started if needed.
+        rsUpdater.compareAndSet(this, null);
       }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void initiateShutdown()
+    {
+      this.shutdown.set(true);
+      super.initiateShutdown();
     }
   }
 
@@ -2529,10 +2549,16 @@ public final class LDAPReplicationDomain extends ReplicationDomain
     if (!shutdown)
     {
       shutdown = true;
+      final RSUpdater rsUpdater = this.rsUpdater.get();
+      if (rsUpdater != null)
+      {
+        rsUpdater.initiateShutdown();
+      }
 
       // stop the thread in charge of flushing the ServerState.
       if (flushThread != null)
       {
+        flushThread.initiateShutdown();
         synchronized (flushThread)
         {
           flushThread.notify();
@@ -4650,7 +4676,11 @@ private boolean solveNamingConflict(ModifyDNOperation op,
         {
           pendingChanges.setRecovering(true);
           broker.setRecoveryRequired(true);
-          new RSUpdater(replServerMaxChangeNumber).start();
+          final RSUpdater rsUpdater = new RSUpdater(replServerMaxChangeNumber);
+          if (this.rsUpdater.compareAndSet(null, rsUpdater))
+          {
+            rsUpdater.start();
+          }
         }
       }
     } catch (Exception e)
@@ -4671,6 +4701,7 @@ private boolean solveNamingConflict(ModifyDNOperation op,
    * @param startingChangeNumber  The ChangeNumber whe we need to start the
    *                              search
    * @param session               The session to use to publish the changes
+   * @param shutdown              whether the current run must be stopped
    *
    * @return                      A boolean indicating he success of the
    *                              operation.
@@ -4678,7 +4709,8 @@ private boolean solveNamingConflict(ModifyDNOperation op,
    */
   public boolean buildAndPublishMissingChanges(
       ChangeNumber startingChangeNumber,
-      ReplicationBroker session)
+      ReplicationBroker session,
+      AtomicBoolean shutdown)
       throws Exception
   {
     // Trim the changes in replayOperations that are older than
@@ -4688,6 +4720,10 @@ private boolean solveNamingConflict(ModifyDNOperation op,
       Iterator<ChangeNumber> it = replayOperations.keySet().iterator();
       while (it.hasNext())
       {
+        if (shutdown.get())
+        {
+          return false;
+        }
         if (it.next().olderOrEqual(startingChangeNumber))
         {
           it.remove();
@@ -4705,6 +4741,11 @@ private boolean solveNamingConflict(ModifyDNOperation op,
     ChangeNumber currentStartChangeNumber = startingChangeNumber;
     do
     {
+      if (shutdown.get())
+      {
+        return false;
+      }
+
       lastRetrievedChange = null;
       // We can't do the search in one go because we need to
       // store the results so that we are sure we send the operations
@@ -4730,9 +4771,15 @@ private boolean solveNamingConflict(ModifyDNOperation op,
         Iterator<FakeOperation> itOp = replayOperations.values().iterator();
         while (itOp.hasNext())
         {
+          if (shutdown.get())
+          {
+            return false;
+          }
           FakeOperation fakeOp = itOp.next();
           if ((fakeOp.getChangeNumber().olderOrEqual(endChangeNumber))
-              && state.cover(fakeOp.getChangeNumber()))
+              && state.cover(fakeOp.getChangeNumber())
+              // do not look for replay operations in the future
+              && !currentStartChangeNumber.newer(now()))
           {
             lastRetrievedChange = fakeOp.getChangeNumber();
             opsToSend.add(fakeOp);
@@ -4747,9 +4794,13 @@ private boolean solveNamingConflict(ModifyDNOperation op,
 
       for (FakeOperation opToSend : opsToSend)
       {
-          session.publishRecovery(opToSend.generateMessage());
+        if (shutdown.get())
+        {
+          return false;
+        }
+        session.publishRecovery(opToSend.generateMessage());
       }
-      opsToSend.clear();
+
       if (lastRetrievedChange != null)
       {
         currentStartChangeNumber = lastRetrievedChange;
@@ -4758,13 +4809,19 @@ private boolean solveNamingConflict(ModifyDNOperation op,
       {
         currentStartChangeNumber = endChangeNumber;
       }
-
     } while (pendingChanges.recoveryUntil(lastRetrievedChange) &&
              (op.getResultCode().equals(ResultCode.SUCCESS)));
 
     return op.getResultCode().equals(ResultCode.SUCCESS);
   }
 
+  private static ChangeNumber now()
+  {
+    // ensure now() will always come last with isNewerThan() test,
+    // even though the timestamp, or the timestamp and seqnum would be the same
+    return new ChangeNumber(TimeThread.getTime(), Integer.MAX_VALUE,
+        Integer.MAX_VALUE);
+  }
 
   /**
    * Search for the changes that happened since fromChangeNumber
@@ -4902,6 +4959,7 @@ private boolean solveNamingConflict(ModifyDNOperation op,
         catch (InterruptedException e)
         {
           // Thread interrupted: check for shutdown.
+          Thread.currentThread().interrupt();
         }
       }
 
