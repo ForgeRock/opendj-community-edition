@@ -81,6 +81,7 @@ import org.glassfish.grizzly.nio.transport.TCPNIOTransport;
 import org.glassfish.grizzly.servlet.WebappContext;
 import org.glassfish.grizzly.ssl.SSLEngineConfigurator;
 import org.glassfish.grizzly.strategies.SameThreadIOStrategy;
+import org.glassfish.grizzly.utils.Charsets;
 import org.opends.messages.Message;
 import org.opends.server.admin.server.ConfigurationChangeListener;
 import org.opends.server.admin.std.server.ConnectionHandlerCfg;
@@ -819,6 +820,7 @@ public class HTTPConnectionHandler extends
     final ServerConfiguration serverConfig = server.getServerConfiguration();
     serverConfig.setMaxBufferedPostSize(requestSize);
     serverConfig.setMaxFormPostSize(requestSize);
+    serverConfig.setDefaultQueryEncoding(Charsets.UTF8_CHARSET);
     if (keepStats())
     {
       setHttpStatsProbe(server);
