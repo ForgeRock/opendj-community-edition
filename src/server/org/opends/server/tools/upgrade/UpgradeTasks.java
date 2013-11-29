@@ -42,6 +42,7 @@ import java.util.logging.Logger;
 
 import javax.security.auth.callback.ConfirmationCallback;
 
+import org.forgerock.opendj.ldap.schema.UnknownSchemaElementException;
 import org.opends.messages.Message;
 import org.opends.server.controls.PersistentSearchChangeType;
 import org.opends.server.protocols.ldap.LDAPFilter;
@@ -280,6 +281,11 @@ public final class UpgradeTasks
           manageTaskException(context, ERR_UPGRADE_ADDATTRIBUTE_FAILS.get(
               schemaFileTemplate.getName(), e.getMessage()), pnc);
         }
+        catch (final UnknownSchemaElementException e)
+        {
+          manageTaskException(context, ERR_UPGRADE_ADDATTRIBUTE_FAILS.get(
+              schemaFileTemplate.getName(), e.getMessage()), pnc);
+        }
       }
     };
   }
@@ -332,6 +338,11 @@ public final class UpgradeTasks
           context.notifyProgress(pnc.changeProgress(100));
         }
         catch (final IOException e)
+        {
+          manageTaskException(context, ERR_UPGRADE_ADDOBJECTCLASS_FAILS.get(
+              schemaFileTemplate.getName(), e.getMessage()), pnc);
+        }
+        catch (final UnknownSchemaElementException e)
         {
           manageTaskException(context, ERR_UPGRADE_ADDOBJECTCLASS_FAILS.get(
               schemaFileTemplate.getName(), e.getMessage()), pnc);

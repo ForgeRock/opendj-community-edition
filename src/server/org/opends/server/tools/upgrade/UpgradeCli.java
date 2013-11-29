@@ -371,18 +371,12 @@ public final class UpgradeCli extends ConsoleApplication implements
     }
     catch (ClientException ex)
     {
-      LOG.log(SEVERE, ex.getMessage());
-      println(Style.ERROR, ex.getMessageObject(), 0);
-
       return ex.getExitCode();
     }
     catch (Exception ex)
     {
-      LOG.log(SEVERE, ERR_UPGRADE_MAIN_UPGRADE_PROCESS.get(ex
-          .getMessage()).toString());
-      println(Style.ERROR, ERR_UPGRADE_MAIN_UPGRADE_PROCESS.get(ex
-          .getMessage()), 0);
-
+      println(Style.ERROR, ERR_UPGRADE_MAIN_UPGRADE_PROCESS
+          .get(ex.getMessage()), 0);
       return EXIT_CODE_ERROR;
     }
     return EXIT_CODE_SUCCESS;

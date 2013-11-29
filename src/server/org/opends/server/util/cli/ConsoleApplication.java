@@ -474,6 +474,7 @@ public abstract class ConsoleApplication
       case ERROR:
         out.println();
         out.println(wrapText("** " + msg, MAX_LINE_WIDTH, indent));
+        out.println();
         break;
       case BREAKLINE:
         out.println();

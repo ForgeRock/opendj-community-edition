@@ -353,7 +353,7 @@ public final class Upgrade
     isVersionCanBeUpdated(context);
 
     // Server offline ?
-    checkIfServerIsRunning();
+    checkIfServerIsRunning(context);
 
     context.notify( INFO_UPGRADE_TITLE.get(), TITLE_CALLBACK);
     context.notify( INFO_UPGRADE_SUMMARY.get(context.getFromVersion()
@@ -395,8 +395,9 @@ public final class Upgrade
         INFO_UPGRADE_DISPLAY_CONFIRM_START.get(), ConfirmationCallback.YES);
     if (userResponse == ConfirmationCallback.NO)
     {
-      throw new ClientException(EXIT_CODE_ERROR,
-          INFO_UPGRADE_ABORTED_BY_USER.get());
+      final Message message = INFO_UPGRADE_ABORTED_BY_USER.get();
+      context.notify(message, WARNING);
+      throw new ClientException(EXIT_CODE_ERROR, message);
     }
 
     try
@@ -425,21 +426,21 @@ public final class Upgrade
     }
     catch (final ClientException e)
     {
-      LOG.log(Level.SEVERE, e.getMessage());
-      context.notify( e.getMessageObject());
+      context.notify(e.getMessageObject(), ERROR_CALLBACK);
       throw e;
     }
     catch (final Exception e)
     {
-      LOG.log(Level.SEVERE, e.getMessage());
-      context.notify(ERR_UPGRADE_TASKS_FAIL.get(e.getMessage()));
-      throw new ClientException(EXIT_CODE_ERROR, Message.raw(e.getMessage()));
+      final Message message = ERR_UPGRADE_TASKS_FAIL.get(e.getMessage());
+      context.notify(message, ERROR_CALLBACK);
+      throw new ClientException(EXIT_CODE_ERROR, message);
     }
     finally
     {
-      context.notify(INFO_UPGRADE_GENERAL_SEE_FOR_DETAILS
-          .get(UpgradeUtils.getInstallationPath() + File.separator
-              + UpgradeLog.UPGRADELOGNAME), NOTICE_CALLBACK);
+      context.notify(INFO_UPGRADE_GENERAL_SEE_FOR_DETAILS.get(UpgradeUtils
+          .getInstallationPath()
+          + File.separator + UpgradeLog.UPGRADELOGNAME), NOTICE_CALLBACK);
+      LOG.log(Level.CONFIG, INFO_UPGRADE_PROCESS_END.get().toString());
     }
   }
 
@@ -525,10 +526,14 @@ public final class Upgrade
   /**
    * The server must be offline during the upgrade.
    *
+   * @param context
+   *          The current context which running the upgrade.
+   *
    * @throws ClientException
    *           An exception is thrown if the server is currently running.
    */
-  private final static void checkIfServerIsRunning() throws ClientException
+  private final static void checkIfServerIsRunning(final UpgradeContext context)
+      throws ClientException
   {
     final String lockFile = LockFileManager.getServerLockFileName();
 
@@ -539,9 +544,9 @@ public final class Upgrade
       // running.
       if (!LockFileManager.acquireExclusiveLock(lockFile, failureReason))
       {
-        LOG.log(Level.SEVERE, failureReason.toString());
-        throw new ClientException(EXIT_CODE_ERROR,
-            ERR_UPGRADE_REQUIRES_SERVER_OFFLINE.get());
+        final Message message = ERR_UPGRADE_REQUIRES_SERVER_OFFLINE.get();
+        context.notify(message, NOTICE_CALLBACK);
+        throw new ClientException(EXIT_CODE_ERROR, message);
       }
     }
     finally
@@ -569,17 +574,20 @@ public final class Upgrade
        * If the server is already up to date then treat it as a successful
        * upgrade so that upgrade is idempotent.
        */
-      final Message message = ERR_UPGRADE_VERSION_UP_TO_DATE.get(context
-          .getToVersion().toString());
+      final Message message =
+          ERR_UPGRADE_VERSION_UP_TO_DATE.get(context.getToVersion().toString());
+      context.notify(message, NOTICE_CALLBACK);
       throw new ClientException(EXIT_CODE_SUCCESS, message);
     }
 
     // The upgrade only supports version >= 2.4.5.
     if (context.getFromVersion().compareTo(UPGRADESUPPORTSVERSIONFROM) < 0)
     {
-      throw new ClientException(EXIT_CODE_ERROR,
+      final Message message =
           INFO_UPGRADE_VERSION_IS_NOT_SUPPORTED.get(UPGRADESUPPORTSVERSIONFROM
-              .toString(), UPGRADESUPPORTSVERSIONFROM.toString()));
+              .toString(), UPGRADESUPPORTSVERSIONFROM.toString());
+      context.notify(message, NOTICE_CALLBACK);
+      throw new ClientException(EXIT_CODE_ERROR, message);
     }
   }
 
@@ -614,7 +622,9 @@ public final class Upgrade
     }
     catch (IOException e)
     {
-      throw new ClientException(EXIT_CODE_ERROR, Message.raw(e.getMessage()));
+      final Message message = Message.raw(e.getMessage());
+      context.notify(message, ERROR_CALLBACK);
+      throw new ClientException(EXIT_CODE_ERROR, message);
     }
     finally
     {
