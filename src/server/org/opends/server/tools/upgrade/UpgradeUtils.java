@@ -38,6 +38,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.SortedMap;
@@ -64,6 +65,7 @@ import org.forgerock.opendj.ldif.LDIFEntryReader;
 import org.forgerock.opendj.ldif.LDIFEntryWriter;
 import org.opends.server.controls.PersistentSearchChangeType;
 import org.opends.server.core.DirectoryServer;
+import org.opends.server.core.SchemaConfigManager;
 import org.opends.server.protocols.ldap.LDAPFilter;
 import org.opends.server.util.SetupUtils;
 import org.opends.server.util.StaticUtils;
@@ -723,7 +725,9 @@ final class UpgradeUtils
     {
       if (folder.isDirectory())
       {
-        for (final File f : folder.listFiles())
+        final FilenameFilter filter =
+            new SchemaConfigManager.SchemaFileFilter();
+        for (final File f : folder.listFiles(filter))
         {
           LOG.log(Level.INFO, String.format("Processing %s", f
               .getAbsolutePath()));
