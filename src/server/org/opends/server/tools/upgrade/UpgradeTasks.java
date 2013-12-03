@@ -131,7 +131,11 @@ public final class UpgradeTasks
         try
         {
           context.notifyProgress(pnc.changeProgress(20));
-
+          if (!schemaFileTemplate.exists() || schemaFileTemplate.length() == 0)
+          {
+            throw new IOException(ERR_UPGRADE_CORRUPTED_TEMPLATE
+                .get(schemaFileTemplate.getPath()).toString());
+          }
           copy(schemaFileTemplate, configSchemaDirectory, true);
           context.notifyProgress(pnc.changeProgress(100));
         }

@@ -596,17 +596,15 @@ final class UpgradeUtils
     LDIFEntryReader reader = null;
     BufferedReader br = null;
     FileWriter fw = null;
-    final File copy =
-        File.createTempFile("copySchema", ".tmp",
-            destination.getParentFile());
+    File copy = null;
     try
     {
       reader = new LDIFEntryReader(new FileInputStream(templateFile));
       if (!reader.hasNext())
       {
         // Unless template are corrupted, this should not happen.
-        throw new IOException(String.format(
-            "'%s' file is empty. Template corrupted.", templateFile.getName()));
+        throw new IOException(ERR_UPGRADE_CORRUPTED_TEMPLATE.get(
+            templateFile.getPath()).toString());
       }
       final LinkedList<String> definitionsList = new LinkedList<String>();
 
@@ -657,7 +655,8 @@ final class UpgradeUtils
       }
       // Then, open the destination file and write the new attribute
       // or objectClass definitions
-
+      copy = File.createTempFile("copySchema", ".tmp",
+          destination.getParentFile());
       br = new BufferedReader(new FileReader(destination));
       fw = new FileWriter(copy);
       String line = br.readLine();
@@ -705,12 +704,12 @@ final class UpgradeUtils
    *          The folder containing the schema files.
    * @param revision
    *          The revision number of the current binary version.
-   * @throws IOException
+   * @throws Exception
    *           If we cannot read the files contained in the folder where the
    *           schema files are supposed to be.
    */
   static void updateConfigUpgradeSchemaFile(final File folder,
-      final String revision) throws IOException
+      final String revision) throws Exception
   {
     // We need to upgrade the schema.ldif.<rev> file contained in the
     // config/upgrade folder otherwise, we cannot enable the backend at
@@ -729,9 +728,9 @@ final class UpgradeUtils
           LOG.log(Level.INFO, String.format("Processing %s", f
               .getAbsolutePath()));
           reader = new LDIFEntryReader(new FileInputStream(f));
-          while (reader.hasNext())
+          try
           {
-            try
+            while (reader.hasNext())
             {
               final Entry entry = reader.readEntry();
               theNewSchemaEntry.setName(entry.getName());
@@ -740,10 +739,11 @@ final class UpgradeUtils
                 theNewSchemaEntry.addAttribute(at);
               }
             }
-            catch (Exception ex)
-            {
-              LOG.log(Level.SEVERE, ex.getMessage());
-            }
+          }
+          catch (Exception ex)
+          {
+            throw new Exception("Error parsing existing schema file "
+                + f.getName() + " - " + ex.getMessage(), ex);
           }
         }
 
