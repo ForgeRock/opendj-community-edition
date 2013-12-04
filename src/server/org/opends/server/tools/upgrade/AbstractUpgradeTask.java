@@ -31,24 +31,14 @@ import org.opends.server.tools.ClientException;
 /**
  * Abstract upgrade task implementation.
  */
-public abstract class AbstractUpgradeTask implements UpgradeTask
+abstract class AbstractUpgradeTask implements UpgradeTask
 {
   /**
    * Creates a new abstract upgrade task.
    */
-  protected AbstractUpgradeTask()
+  AbstractUpgradeTask()
   {
     // No implementation required.
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void end(UpgradeContext context)
-      throws ClientException
-  {
-    // Nothing to do.
   }
 
   /**
@@ -65,7 +55,16 @@ public abstract class AbstractUpgradeTask implements UpgradeTask
    * {@inheritDoc}
    */
   @Override
-  public void start(UpgradeContext context)
+  public void perform(UpgradeContext context) throws ClientException
+  {
+    // Must be implemented.
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void verify(UpgradeContext context)
       throws ClientException
   {
     // Nothing to do.
@@ -75,7 +74,17 @@ public abstract class AbstractUpgradeTask implements UpgradeTask
    * {@inheritDoc}
    */
   @Override
-  public void verify(UpgradeContext context)
+  public void postUpgrade(UpgradeContext context)
+      throws ClientException
+  {
+    // Nothing to do.
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void postponePostUpgrade(UpgradeContext context)
       throws ClientException
   {
     // Nothing to do.

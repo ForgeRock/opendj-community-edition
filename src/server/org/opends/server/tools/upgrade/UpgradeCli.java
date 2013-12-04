@@ -41,6 +41,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.security.auth.callback.Callback;
@@ -52,7 +53,6 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import org.opends.messages.Message;
 import org.opends.server.extensions.ConfigFileHandler;
 import org.opends.server.tools.ClientException;
-import org.opends.server.util.BuildVersion;
 import org.opends.server.util.ServerConstants;
 import org.opends.server.util.StaticUtils;
 import org.opends.server.util.args.ArgumentException;
@@ -196,7 +196,7 @@ public final class UpgradeCli extends ConsoleApplication implements
    *
    * @return {@code true} if the upgrade process is forced.
    */
-  public boolean isForceUpgrade()
+  private boolean isForceUpgrade()
   {
     return force.isPresent();
   }
@@ -207,7 +207,7 @@ public final class UpgradeCli extends ConsoleApplication implements
    *
    * @return {@code true} if the errors are forced to be ignored.
    */
-  public boolean isIgnoreErrors()
+  private boolean isIgnoreErrors()
   {
     return ignoreErrors.isPresent();
   }
@@ -217,7 +217,7 @@ public final class UpgradeCli extends ConsoleApplication implements
    *
    * @return {@code true} if license is accepted by default.
    */
-  public boolean isAcceptLicense()
+  private boolean isAcceptLicense()
   {
     return acceptLicense.isPresent();
   }
@@ -357,14 +357,11 @@ public final class UpgradeCli extends ConsoleApplication implements
       UpgradeLog.initLogFileHandler();
 
       // Upgrade's context.
-      UpgradeContext context =
-          new UpgradeContext(BuildVersion.instanceVersion(), BuildVersion
-              .binaryVersion(), this);
-
-      context.setIgnoreErrorsMode(isIgnoreErrors());
-      context.setAcceptLicenseMode(isAcceptLicense());
-      context.setInteractiveMode(isInteractive());
-      context.setForceUpgradeMode(isForceUpgrade());
+      UpgradeContext context = new UpgradeContext(this)
+          .setIgnoreErrorsMode(isIgnoreErrors())
+          .setAcceptLicenseMode(isAcceptLicense())
+          .setInteractiveMode(isInteractive())
+          .setForceUpgradeMode(isForceUpgrade());
 
       // Starts upgrade.
       Upgrade.upgrade(context);
@@ -375,8 +372,9 @@ public final class UpgradeCli extends ConsoleApplication implements
     }
     catch (Exception ex)
     {
-      println(Style.ERROR, ERR_UPGRADE_MAIN_UPGRADE_PROCESS
-          .get(ex.getMessage()), 0);
+      println(Style.ERROR, ERR_UPGRADE_MAIN_UPGRADE_PROCESS.get(ex
+          .getMessage()), 0);
+
       return EXIT_CODE_ERROR;
     }
     return EXIT_CODE_SUCCESS;
@@ -403,24 +401,28 @@ public final class UpgradeCli extends ConsoleApplication implements
         // Displays formatted notifications.
         final FormattedNotificationCallback fnc =
             (FormattedNotificationCallback) c;
-        LOG.log(INFO, fnc.getMessage());
         switch (fnc.getMessageSubType())
         {
         case TITLE_CALLBACK:
           println(Style.TITLE, Message.raw(fnc.getMessage()), 0);
+          LOG.log(INFO, fnc.getMessage());
           break;
         case SUBTITLE_CALLBACK:
           println(Style.SUBTITLE, Message.raw(fnc.getMessage()),
               4);
+          LOG.log(INFO, fnc.getMessage());
           break;
         case NOTICE_CALLBACK:
           println(Style.NOTICE, Message.raw(fnc.getMessage()), 1);
+          LOG.log(INFO, fnc.getMessage());
           break;
         case ERROR_CALLBACK:
           println(Style.ERROR, Message.raw(fnc.getMessage()), 1);
+          LOG.log(Level.SEVERE, fnc.getMessage());
           break;
-        case BREAKLINE:
-          println(Style.BREAKLINE, Message.raw(fnc.getMessage()), 1);
+        case WARNING:
+          println(Style.WARNING, Message.raw(fnc.getMessage()), 2);
+          LOG.log(Level.WARNING, fnc.getMessage());
           break;
         default:
           LOG.log(SEVERE, "Unsupported message type: "
@@ -446,9 +448,7 @@ public final class UpgradeCli extends ConsoleApplication implements
         final ConfirmationCallback cc = (ConfirmationCallback) c;
         List<String> choices = new ArrayList<String>();
 
-        final String defaultOption =
-            UpgradeContext.getDefaultOption(cc.getDefaultOption());
-
+        final String defaultOption = getDefaultOption(cc.getDefaultOption());
         StringBuilder prompt =
             new StringBuilder(StaticUtils.wrapText(cc.getPrompt(),
                 ServerConstants.MAX_LINE_WIDTH, 2));
@@ -547,10 +547,9 @@ public final class UpgradeCli extends ConsoleApplication implements
             cc.setSelectedIndex(cc.getDefaultOption());
           }
           // Displays the prompt
-          prompt.append(" ").append(
-              UpgradeContext.getDefaultOption(cc.getSelectedIndex()));
+          prompt.append(" ").append(getDefaultOption(cc.getSelectedIndex()));
           println(Style.SUBTITLE, Message.raw(prompt), 0);
-          LOG.log(INFO, UpgradeContext.getDefaultOption(cc.getSelectedIndex()));
+          LOG.log(INFO, getDefaultOption(cc.getSelectedIndex()));
         }
       }
       else
@@ -559,5 +558,24 @@ public final class UpgradeCli extends ConsoleApplication implements
         throw new UnsupportedCallbackException(c, "Unrecognized Callback");
       }
     }
+  }
+
+
+
+  private static String getDefaultOption(final int defaultOption)
+  {
+    if (defaultOption == ConfirmationCallback.YES)
+    {
+      return INFO_PROMPT_YES_COMPLETE_ANSWER.get().toString();
+    }
+    else if (defaultOption == ConfirmationCallback.NO)
+    {
+      return INFO_PROMPT_NO_COMPLETE_ANSWER.get().toString();
+    }
+    else if (defaultOption == ConfirmationCallback.CANCEL)
+    {
+      return INFO_TASKINFO_CMD_CANCEL_CHAR.get().toString();
+    }
+    return null;
   }
 }

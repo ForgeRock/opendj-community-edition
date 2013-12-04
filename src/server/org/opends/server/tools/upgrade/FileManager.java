@@ -52,7 +52,7 @@ import java.util.logging.Level;
  * system files. This class handles application notifications for interesting
  * events.
  */
-public class FileManager
+class FileManager
 {
 
   /**
@@ -362,7 +362,6 @@ public class FileManager
       }
       else
       {
-
         // If overwriting and the destination exists then kill it
         if (destination.exists() && overwrite)
         {
@@ -399,7 +398,6 @@ public class FileManager
                   FilePermission.setPermissions(destination, permissions);
                 }
               }
-
             }
             catch (IOException e)
             {

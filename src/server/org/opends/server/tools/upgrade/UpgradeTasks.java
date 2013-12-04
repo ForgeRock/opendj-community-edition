@@ -28,27 +28,32 @@
 package org.opends.server.tools.upgrade;
 
 import static org.opends.messages.ToolMessages.*;
-import static org.opends.server.tools.ToolConstants.OPTION_LONG_FORCE_UPGRADE;
-import static org.opends.server.tools.ToolConstants.OPTION_LONG_NO_PROMPT;
 import static org.opends.server.tools.upgrade.FileManager.copy;
+import static org.opends.server.tools.upgrade.Installation
+.CURRENT_CONFIG_FILE_NAME;
 import static org.opends.server.tools.upgrade.Upgrade.*;
 import static org.opends.server.tools.upgrade.UpgradeUtils.*;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.security.auth.callback.ConfirmationCallback;
+import javax.security.auth.callback.TextOutputCallback;
 
 import org.forgerock.opendj.ldap.schema.UnknownSchemaElementException;
 import org.opends.messages.Message;
-import org.opends.server.controls.PersistentSearchChangeType;
 import org.opends.server.protocols.ldap.LDAPFilter;
 import org.opends.server.tools.ClientException;
-import org.opends.server.tools.upgrade.UpgradeTask.TaskType;
+import org.opends.server.tools.RebuildIndex;
 import org.opends.server.util.BuildVersion;
+import org.opends.server.util.ChangeOperationType;
 
 /**
  * Factory methods for create new upgrade tasks.
@@ -61,10 +66,25 @@ public final class UpgradeTasks
   static int countErrors = 0;
 
   /**
-   * Upgrade's logger.
+   * Logger for the upgrade.
    */
   static private final Logger LOG = Logger
       .getLogger(UpgradeCli.class.getName());
+
+  /**
+   * The indexes list to rebuild are united here.
+   */
+  static Set<String> indexesListToRebuild = new HashSet<String>();
+
+  /**
+   * A flag to avoid rebuild single indexes if 'rebuild all' is selected.
+   */
+  static boolean isRebuildAllIndexesIsPresent = false;
+
+  /**
+   * A flag for marking 'rebuild all' task accepted by user.
+   */
+  static boolean isRebuildAllIndexesTaskAccepted = false;
 
   /**
    * Returns a new upgrade task which applies an LDIF record to all
@@ -130,14 +150,14 @@ public final class UpgradeTasks
 
         try
         {
-          context.notifyProgress(pnc.changeProgress(20));
+          context.notifyProgress(pnc.setProgress(20));
           if (!schemaFileTemplate.exists() || schemaFileTemplate.length() == 0)
           {
             throw new IOException(ERR_UPGRADE_CORRUPTED_TEMPLATE
                 .get(schemaFileTemplate.getPath()).toString());
           }
           copy(schemaFileTemplate, configSchemaDirectory, true);
-          context.notifyProgress(pnc.changeProgress(100));
+          context.notifyProgress(pnc.setProgress(100));
         }
         catch (final IOException e)
         {
@@ -174,10 +194,10 @@ public final class UpgradeTasks
 
         try
         {
-          context.notifyProgress(pnc.changeProgress(20));
+          context.notifyProgress(pnc.setProgress(20));
 
           copy(configFile, configDirectory, true);
-          context.notifyProgress(pnc.changeProgress(100));
+          context.notifyProgress(pnc.setProgress(100));
         }
         catch (final IOException e)
         {
@@ -278,7 +298,7 @@ public final class UpgradeTasks
 
           displayChangeCount(pathDestination.getPath(), changeCount);
 
-          context.notifyProgress(pnc.changeProgress(100));
+          context.notifyProgress(pnc.setProgress(100));
         }
         catch (final IOException e)
         {
@@ -329,7 +349,7 @@ public final class UpgradeTasks
 
         final File pathDestination = new File(configSchemaDirectory, fileName);
 
-        context.notifyProgress(pnc.changeProgress(20));
+        context.notifyProgress(pnc.setProgress(20));
 
         try
         {
@@ -339,7 +359,7 @@ public final class UpgradeTasks
 
           displayChangeCount(pathDestination.getPath(), changeCount);
 
-          context.notifyProgress(pnc.changeProgress(100));
+          context.notifyProgress(pnc.setProgress(100));
         }
         catch (final IOException e)
         {
@@ -403,18 +423,6 @@ public final class UpgradeTasks
       }
 
       @Override
-      public void start(UpgradeContext context) throws ClientException
-      {
-        if (currentVersionEqualToOrMoreRecentThan(context, version))
-        {
-          for (UpgradeTask task : tasks)
-          {
-            task.start(context);
-          }
-        }
-      }
-
-      @Override
       public void perform(UpgradeContext context) throws ClientException
       {
         if (currentVersionEqualToOrMoreRecentThan(context, version))
@@ -427,17 +435,32 @@ public final class UpgradeTasks
       }
 
       @Override
-      public void end(UpgradeContext context) throws ClientException
+      public void postUpgrade(UpgradeContext context) throws ClientException
       {
         if (currentVersionEqualToOrMoreRecentThan(context, version))
         {
-          for (UpgradeTask task : tasks)
+          boolean isOk = true;
+          for (final UpgradeTask task : tasks)
           {
-            task.end(context);
+            if (isOk)
+            {
+              try
+              {
+                task.postUpgrade(context);
+              }
+              catch (ClientException e)
+              {
+                LOG.log(Level.SEVERE, e.getMessage());
+                isOk = false;
+              }
+            }
+            else
+            {
+              task.postponePostUpgrade(context);
+            }
           }
         }
       }
-
 
 
       private boolean currentVersionEqualToOrMoreRecentThan(
@@ -459,22 +482,35 @@ public final class UpgradeTasks
   {
     return new AbstractUpgradeTask()
     {
+      private boolean isATaskToPerform = false;
+
       @Override
-      public void perform(final UpgradeContext context) throws ClientException
+      public void interact(UpgradeContext context) throws ClientException
       {
-        // TODO
+        Upgrade.setHasPostUpgradeTask(true);
+        // Requires answer from the user.
+        final int answer = context.confirmYN(summary, ConfirmationCallback.NO);
+        isATaskToPerform = (answer == ConfirmationCallback.YES);
+        isRebuildAllIndexesIsPresent = true;
+        isRebuildAllIndexesTaskAccepted = isATaskToPerform;
       }
 
       @Override
-      public void start(final UpgradeContext context) throws ClientException
+      public void postUpgrade(final UpgradeContext context)
+          throws ClientException
       {
-        context.notify(summary);
+        if (!isATaskToPerform)
+        {
+          postponePostUpgrade(context);
+        }
       }
 
       @Override
-      public void verify(final UpgradeContext context) throws ClientException
+      public void postponePostUpgrade(UpgradeContext context)
+          throws ClientException
       {
-        verifyTaskType(TaskType.MANDATORY_USER_INTERACTION, context);
+        context.notify(INFO_UPGRADE_ALL_REBUILD_INDEX_DECLINED.get(),
+            TextOutputCallback.WARNING);
       }
     };
   }
@@ -482,48 +518,145 @@ public final class UpgradeTasks
 
 
   /**
-   * Creates a rebuild index task for a single index. At the moment this is
-   * implemented as a simple stub which displays a message which should prompt
-   * the user to rebuild the index manually once the upgrade has completed.
-   * <p>
-   * In future this task should register the index to be rebuilt in a table. A
-   * subsequent task executed at the end of the upgrade process will then obtain
-   * the set of indexes to be rebuilt, optimize it (e.g. removing duplicates),
-   * and perform the rebuild.
+   * Creates a rebuild index task for a given single index. As this task is
+   * possibly lengthy, it's considered as a post upgrade task. This task is not
+   * mandatory; e.g not require user interaction, but could be required to get a
+   * fully functional server. <br />
+   * The post upgrade task just register the task. The rebuild indexes tasks are
+   * completed at the end of the upgrade process.
    *
    * @param summary
    *          A message describing why the index needs to be rebuilt and asking
-   *          them whether or not they wish to continue.
+   *          them whether or not they wish to perform this task after the
+   *          upgrade.
+   * @param index
+   *          The index to rebuild.
    * @return The rebuild index task.
    */
-  public static UpgradeTask rebuildSingleIndex(final Message summary)
+  public static UpgradeTask rebuildSingleIndex(final Message summary,
+      final String index)
   {
     return new AbstractUpgradeTask()
     {
-      @Override
-      public void verify(final UpgradeContext context) throws ClientException
-      {
-        verifyTaskType(TaskType.MANDATORY_USER_INTERACTION, context);
-      }
+      private boolean isATaskToPerform = false;
 
       @Override
       public void interact(UpgradeContext context) throws ClientException
       {
-        // Require acknowledgment from the user.
+        Upgrade.setHasPostUpgradeTask(true);
+        // Requires answer from the user.
         final int answer = context.confirmYN(summary, ConfirmationCallback.NO);
+        isATaskToPerform = (answer == ConfirmationCallback.YES);
+      }
 
-        // The user refused to perform this task.
-        if (answer == ConfirmationCallback.NO)
+      @Override
+      public void postUpgrade(final UpgradeContext context)
+          throws ClientException
+      {
+        if (isATaskToPerform)
         {
-          throw new ClientException(EXIT_CODE_MANUAL_INTERVENTION,
-              INFO_UPGRADE_ABORTED_BY_USER.get());
+          indexesListToRebuild.add(index);
+        }
+        else
+        {
+          postponePostUpgrade(context);
         }
       }
 
       @Override
-      public void perform(final UpgradeContext context) throws ClientException
+      public void postponePostUpgrade(UpgradeContext context)
+          throws ClientException
       {
-        // TODO: automatic rebuild is not supported yet.
+        if (!isRebuildAllIndexesIsPresent)
+        {
+          context.notify(INFO_UPGRADE_REBUILD_INDEX_DECLINED.get(index),
+              TextOutputCallback.WARNING);
+        }
+      }
+    };
+  }
+
+  /**
+   * This task is processed at the end of the upgrade, rebuilding indexes. If a
+   * rebuild all indexes has been registered before, it takes the flag
+   * relatively to single rebuild index.
+   *
+   * @return The post upgrade rebuild indexes task.
+   */
+  public static UpgradeTask postUpgradeRebuildIndexes()
+  {
+    return new AbstractUpgradeTask()
+    {
+      @Override
+      public void postUpgrade(final UpgradeContext context)
+          throws ClientException
+      {
+        // Sets the arguments like the rebuild index command line.
+        final List<String> args = new LinkedList<String>();
+        args.addAll(Arrays.asList(
+            "-f",
+            new File(configDirectory, CURRENT_CONFIG_FILE_NAME)
+              .getAbsolutePath()));
+
+        // Index(es) could be contained in several backends.
+        for (final String be : UpgradeUtils.getLocalBackendsFromConfig())
+        {
+          args.add("-b");
+          args.add(be);
+        }
+
+        Message message = null;
+        if (isRebuildAllIndexesIsPresent && isRebuildAllIndexesTaskAccepted)
+        {
+          args.add("--rebuildAll");
+          message = INFO_UPGRADE_REBUILD_ALL.get();
+        }
+        else if (!indexesListToRebuild.isEmpty()
+            && !isRebuildAllIndexesTaskAccepted)
+        {
+          message =
+              INFO_UPGRADE_REBUILD_INDEX_STARTS.get(Arrays
+                  .toString(indexesListToRebuild.toArray()));
+
+          // Adding all requested indexes.
+          for (final String indexToRebuild : indexesListToRebuild)
+          {
+            args.add("-i");
+            args.add(indexToRebuild);
+          }
+        } else {
+          return;
+        }
+
+        ProgressNotificationCallback pnc =
+            new ProgressNotificationCallback(0, message, 25);
+        LOG.log(Level.INFO, message.toString());
+        context.notifyProgress(pnc);
+
+        final String[] commandLineArgs = args.toArray(new String[args.size()]);
+        // Displays info about command line args for log only.
+        LOG.log(Level.INFO, INFO_UPGRADE_REBUILD_INDEX_ARGUMENTS.get(
+            Arrays.toString(commandLineArgs)).toString());
+
+        /*
+         * The rebuild-index process just display a status ok / fails. The
+         * logger stream contains all the log linked to this process. The
+         * complete process is not displayed in the upgrade console.
+         */
+        final int result =
+            new RebuildIndex().rebuildIndexesWithinMultipleBackends(true,
+                UpgradeLog.getPrintStream(), commandLineArgs);
+        if (result == 0)
+        {
+          LOG.log(Level.INFO, INFO_UPGRADE_REBUILD_INDEX_ENDS.get().toString());
+          context.notifyProgress(pnc.setProgress(100));
+        }
+        else
+        {
+          final Message msg = ERR_UPGRADE_PERFORMING_POST_TASKS_FAIL.get();
+          context.notifyProgress(pnc.setProgress(-100));
+          throw new ClientException(EXIT_CODE_ERROR, msg);
+        }
       }
     };
   }
@@ -556,7 +689,7 @@ public final class UpgradeTasks
           updateConfigUpgradeSchemaFile(configSchemaDirectory, String
               .valueOf(context.getToVersion().getRevisionNumber()));
 
-          context.notifyProgress(pnc.changeProgress(100));
+          context.notifyProgress(pnc.setProgress(100));
         }
         catch (final Exception ex)
         {
@@ -595,20 +728,20 @@ public final class UpgradeTasks
           try
           {
             final File oldSnmpConfig =
-                new File(UpgradeUtils.configSnmpSecurityDirectory
-                    + File.separator + "opends-snmp.security");
+                new File(UpgradeUtils.configSnmpSecurityDirectory,
+                    "opends-snmp.security");
             if (oldSnmpConfig.exists())
             {
-              context.notifyProgress(pnc.changeProgress(20));
+              context.notifyProgress(pnc.setProgress(20));
               LOG.log(Level.INFO, summary.toString());
 
               final File snmpConfig =
-                  new File(UpgradeUtils.configSnmpSecurityDirectory
-                      + File.separator + "opendj-snmp.security");
+                  new File(UpgradeUtils.configSnmpSecurityDirectory,
+                      "opendj-snmp.security");
 
               FileManager.rename(oldSnmpConfig, snmpConfig);
 
-              context.notifyProgress(pnc.changeProgress(100));
+              context.notifyProgress(pnc.setProgress(100));
             }
           }
           catch (final Exception ex)
@@ -670,11 +803,11 @@ public final class UpgradeTasks
 
             final int changeCount =
                 updateConfigFile(configFile.getPath(), null,
-                    PersistentSearchChangeType.ADD, ldif);
+                    ChangeOperationType.ADD, ldif);
 
             displayChangeCount(configFile.getPath(), changeCount);
 
-            context.notifyProgress(pnc.changeProgress(100));
+            context.notifyProgress(pnc.setProgress(100));
           }
           catch (final Exception e)
           {
@@ -707,7 +840,7 @@ public final class UpgradeTasks
     LOG.log(Level.INFO, summary);
     if (filter != null)
     {
-      LOG.log(Level.INFO, filter.toString());
+      LOG.log(Level.INFO, filter);
     }
     if (ldif != null)
     {
@@ -720,7 +853,7 @@ public final class UpgradeTasks
       throws ClientException
   {
     countErrors++;
-    context.notifyProgress(pnc.changeProgress(-100));
+    context.notifyProgress(pnc.setProgress(-100));
     LOG.log(Level.SEVERE, message.toString());
     if (!context.isIgnoreErrorsMode())
     {
@@ -775,11 +908,11 @@ public final class UpgradeTasks
 
             final int changeCount =
                 updateConfigFile(configFile.getPath(), LDAPFilter
-                    .decode(filter), PersistentSearchChangeType.MODIFY, ldif);
+                    .decode(filter), ChangeOperationType.MODIFY, ldif);
 
             displayChangeCount(configFile.getPath(), changeCount);
 
-            context.notifyProgress(pnc.changeProgress(100));
+            context.notifyProgress(pnc.setProgress(100));
           }
           catch (final Exception e)
           {
@@ -791,39 +924,6 @@ public final class UpgradeTasks
     };
   }
 
-  @SuppressWarnings("fallthrough")
-  private static void verifyTaskType(final TaskType type,
-      final UpgradeContext context) throws ClientException
-  {
-    /*
-     * Checks CLI/GUI options via context. The process will stop
-     * if user has selected conflicting options.
-     */
-    switch (type)
-    {
-    case NEED_USER_INTERACTION:
-    {
-      // Nothing to do.
-      break;
-    }
-    case MANDATORY_USER_INTERACTION:
-    case TAKE_LONG_TIME_TO_COMPLETE:
-    case CANNOT_BE_REVERTED:
-      // The option is not present ? Stops the process.
-      if (!context.isInteractiveMode() && !context.isForceUpgradeMode())
-      {
-        context
-            .notify(Message.raw(" "), FormattedNotificationCallback.BREAKLINE);
-        context.notify(ERR_UPGRADE_USER_INTERACTION_REQUIRED.get(
-            OPTION_LONG_NO_PROMPT, OPTION_LONG_FORCE_UPGRADE),
-            FormattedNotificationCallback.NOTICE_CALLBACK);
-        throw new ClientException(EXIT_CODE_MANUAL_INTERVENTION,
-            ERR_UPGRADE_INVALID_USER_OPTIONS_SELECTED.get());
-      }
-    default:
-      break;
-    }
-  }
 
   // Prevent instantiation.
   private UpgradeTasks()

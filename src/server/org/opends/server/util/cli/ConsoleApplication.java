@@ -126,9 +126,9 @@ public abstract class ConsoleApplication
      */
     ERROR,
     /**
-     * Defines a breakline.
+     * Defines a warning.
      */
-    BREAKLINE,
+    WARNING
   }
 
   // The error stream which this application should use.
@@ -176,23 +176,8 @@ public abstract class ConsoleApplication
       this.in = new BufferedReader(new NullReader());
     }
 
-    if (out != null)
-    {
-      this.out = out;
-    }
-    else
-    {
-      this.out = NullOutputStream.printStream();
-    }
-
-    if (err != null)
-    {
-      this.err = out;
-    }
-    else
-    {
-      this.err = NullOutputStream.printStream();
-    }
+    this.out = NullOutputStream.wrapOrNullStream(out);
+    this.err = NullOutputStream.wrapOrNullStream(err);
   }
 
   /**
@@ -217,23 +202,8 @@ public abstract class ConsoleApplication
       this.in = new BufferedReader(new NullReader());
     }
 
-    if (out != null)
-    {
-      this.out = new PrintStream(out);
-    }
-    else
-    {
-      this.out = NullOutputStream.printStream();
-    }
-
-    if (err != null)
-    {
-      this.err = new PrintStream(err);
-    }
-    else
-    {
-      this.err = NullOutputStream.printStream();
-    }
+    this.out = NullOutputStream.wrapOrNullStream(out);
+    this.err = NullOutputStream.wrapOrNullStream(err);
   }
 
   /**
@@ -476,8 +446,8 @@ public abstract class ConsoleApplication
         out.println(wrapText("** " + msg, MAX_LINE_WIDTH, indent));
         out.println();
         break;
-      case BREAKLINE:
-        out.println();
+      case WARNING:
+        out.println(wrapText("[!] " + msg, MAX_LINE_WIDTH, indent));
         break;
       default:
         out.println(wrapText(msg, MAX_LINE_WIDTH, indent));
@@ -561,9 +531,12 @@ public abstract class ConsoleApplication
         }
       }
       bar.append(".   ");
-      if(progress >= 0) {
+      if (progress >= 0)
+      {
         bar.append(progress).append("%     ");
-      } else {
+      }
+      else
+      {
         bar.append("FAIL");
       }
       final int endBuilder = linePos + bar.length();

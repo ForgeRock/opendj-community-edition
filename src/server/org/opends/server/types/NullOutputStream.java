@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
+ *      Portions Copyright 2013 ForgeRock AS
  */
 package org.opends.server.types;
 
@@ -83,7 +84,23 @@ public final class NullOutputStream
     return printStream;
   }
 
-
+  /**
+   * Returns s wrapped into a {@link PrintStream} if is not null,
+   * {@link NullOutputStream#printStream()} otherwise.
+   *
+   * @param s
+   *          the OutputStream to wrap into a {@link PrintStream}. Can be null.
+   * @return a PrintStream wrapping s if not null,
+   *         {@link NullOutputStream#printStream()} otherwise.
+   */
+  public static PrintStream wrapOrNullStream(OutputStream s)
+  {
+    if (s != null)
+    {
+      return new PrintStream(s);
+    }
+    return NullOutputStream.printStream();
+  }
 
   /**
    * Creates a new instance of this null output stream.
