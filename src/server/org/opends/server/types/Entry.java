@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2013 ForgeRock AS
+ *      Portions copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.types;
 
@@ -5409,19 +5409,18 @@ public class Entry
     if (attrNameList == null || attrNameList.isEmpty())
     {
       // Common case: return filtered user attributes.
-      userAttrsCopy =
-          new HashMap<AttributeType, List<Attribute>>(userAttributes
-              .size());
+      userAttrsCopy = new LinkedHashMap<AttributeType, List<Attribute>>(
+          userAttributes.size());
       operationalAttrsCopy =
-          new HashMap<AttributeType, List<Attribute>>(0);
+          new LinkedHashMap<AttributeType, List<Attribute>>(0);
 
       if (omitReal)
       {
-        objectClassesCopy = new HashMap<ObjectClass, String>(0);
+        objectClassesCopy = new LinkedHashMap<ObjectClass, String>(0);
       }
       else if (omitValues)
       {
-        objectClassesCopy = new HashMap<ObjectClass, String>(0);
+        objectClassesCopy = new LinkedHashMap<ObjectClass, String>(0);
 
         // Add empty object class attribute.
         AttributeType ocType =
@@ -5433,7 +5432,7 @@ public class Entry
       else
       {
         objectClassesCopy =
-            new HashMap<ObjectClass, String>(objectClasses);
+            new LinkedHashMap<ObjectClass, String>(objectClasses);
 
         // First, add the objectclass attribute.
         Attribute ocAttr = getObjectClassAttribute();
@@ -5456,19 +5455,18 @@ public class Entry
       // Incrementally build table of attributes.
       if (omitReal || omitValues)
       {
-        objectClassesCopy = new HashMap<ObjectClass, String>(0);
+        objectClassesCopy = new LinkedHashMap<ObjectClass, String>(0);
       }
       else
       {
         objectClassesCopy =
-            new HashMap<ObjectClass, String>(objectClasses.size());
+            new LinkedHashMap<ObjectClass, String>(objectClasses.size());
       }
 
-      userAttrsCopy =
-          new HashMap<AttributeType, List<Attribute>>(userAttributes
-              .size());
+      userAttrsCopy = new LinkedHashMap<AttributeType, List<Attribute>>(
+          userAttributes.size());
       operationalAttrsCopy =
-          new HashMap<AttributeType, List<Attribute>>(
+          new LinkedHashMap<AttributeType, List<Attribute>>(
               operationalAttributes.size());
 
       for (String attrName : attrNameList)
