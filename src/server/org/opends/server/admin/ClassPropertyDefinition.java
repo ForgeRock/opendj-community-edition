@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2008 Sun Microsystems, Inc.
+ *      Portions copyright 2014 ForgeRock AS.
  */
 
 package org.opends.server.admin;
@@ -86,23 +87,26 @@ public final class ClassPropertyDefinition extends PropertyDefinition<String> {
     public final void addInstanceOf(String className) {
       ensureNotNull(className);
 
-      // Do some basic checks to make sure the string representation
-      // is valid.
+      /*
+       * Do some basic checks to make sure the string representation is valid.
+       */
       String value = className.trim();
       if (!value.matches(CLASS_RE)) {
         throw new IllegalArgumentException("\"" + value
             + "\" is not a valid Java class name");
       }
 
-      // If possible try and load the class in order to perform
-      // additional
-      // validation.
+      /*
+       * If possible try and load the class in order to perform additional
+       * validation.
+       */
       if (isAllowClassValidation()) {
-        // Check that the class can be loaded so that validation can
-        // be
-        // performed.
+        /*
+         * Check that the class can be loaded so that validation can be
+         * performed.
+         */
         try {
-          loadClass(value);
+          loadClass(value, true);
         } catch (ClassNotFoundException e) {
           // TODO: can we do something better here?
           throw new RuntimeException(e);
@@ -133,8 +137,9 @@ public final class ClassPropertyDefinition extends PropertyDefinition<String> {
   private static final String CLASS_RE =
     "^([A-Za-z][A-Za-z0-9_]*\\.)*[A-Za-z][A-Za-z0-9_]*(\\$[A-Za-z0-9_]+)*$";
 
-  // Flag indicating whether class property values should be
-  // validated.
+  /*
+   * Flag indicating whether class property values should be validated.
+   */
   private static boolean allowClassValidation = true;
 
 
@@ -189,9 +194,9 @@ public final class ClassPropertyDefinition extends PropertyDefinition<String> {
 
 
   // Load a named class.
-  private static Class<?> loadClass(String className)
+  private static Class<?> loadClass(String className, boolean initialize)
       throws ClassNotFoundException, LinkageError {
-    return Class.forName(className, true, ClassLoaderProvider
+    return Class.forName(className, initialize, ClassLoaderProvider
         .getInstance().getClassLoader());
   }
 
@@ -246,7 +251,7 @@ public final class ClassPropertyDefinition extends PropertyDefinition<String> {
     try {
       validateValue(value);
     } catch (IllegalPropertyValueException e) {
-      throw new IllegalPropertyValueStringException(this, value);
+      throw new IllegalPropertyValueStringException(this, value, e.getCause());
     }
 
     return value;
@@ -293,7 +298,7 @@ public final class ClassPropertyDefinition extends PropertyDefinition<String> {
 
     // Make sure that the named class is valid.
     validateClassName(className);
-    Class<?> theClass = validateClassInterfaces(className);
+    Class<?> theClass = validateClassInterfaces(className, true);
 
     // Cast it to the required type.
     return theClass.asSubclass(instanceOf);
@@ -325,53 +330,55 @@ public final class ClassPropertyDefinition extends PropertyDefinition<String> {
     // Always make sure the name is a valid class name.
     validateClassName(value);
 
-    // If additional validation is enabled then attempt to load the
-    // class and
-    // check the interfaces that it implements/extends.
+    /*
+     * If additional validation is enabled then attempt to load the class and
+     * check the interfaces that it implements/extends.
+     */
     if (allowClassValidation) {
-      validateClassInterfaces(value);
+      validateClassInterfaces(value, false);
     }
   }
 
 
 
-  // Make sure that named class implements the interfaces named by
-  // this
-  // definition.
-  private Class<?> validateClassInterfaces(String className)
+  /*
+   * Make sure that named class implements the interfaces named by this
+   * definition.
+   */
+  private Class<?> validateClassInterfaces(String className, boolean initialize)
       throws IllegalPropertyValueException {
-    String nvalue = className.trim();
-
-    Class<?> theClass;
-    try {
-      theClass = loadClass(nvalue);
-    } catch (Exception e) {
-      // If the class cannot be loaded then it is an invalid value.
-      throw new IllegalPropertyValueException(this, className);
-    }
-
+    Class<?> theClass = loadClassForValidation(className, className,
+        initialize);
     for (String i : instanceOfInterfaces) {
-      try {
-        Class<?> instanceOfClass = loadClass(i);
-
-        if (!instanceOfClass.isAssignableFrom(theClass)) {
-          throw new IllegalPropertyValueException(this, className);
-        }
-      } catch (Exception e) {
-        // Should not happen because the class was validated when the
-        // property
-        // definition was constructed.
+      Class<?> instanceOfClass = loadClassForValidation(className, i,
+          initialize);
+      if (!instanceOfClass.isAssignableFrom(theClass)) {
         throw new IllegalPropertyValueException(this, className);
       }
     }
-
     return theClass;
   }
 
 
 
-  // Do some basic checks to make sure the string representation is
-  // valid.
+  private Class<?> loadClassForValidation(String componentClassName,
+      String classToBeLoaded, boolean initialize) {
+    try {
+      return loadClass(classToBeLoaded.trim(), initialize);
+    } catch (ClassNotFoundException e) {
+      // If the class cannot be loaded then it is an invalid value.
+      throw new IllegalPropertyValueException(this, componentClassName, e);
+    } catch (LinkageError e) {
+      // If the class cannot be initialized then it is an invalid value.
+      throw new IllegalPropertyValueException(this, componentClassName, e);
+    }
+  }
+
+
+
+  /*
+   * Do some basic checks to make sure the string representation is valid.
+   */
   private void validateClassName(String className)
       throws IllegalPropertyValueException {
     String nvalue = className.trim();
