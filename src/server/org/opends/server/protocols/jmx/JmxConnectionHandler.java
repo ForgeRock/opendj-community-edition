@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions copyright 2013 ForgeRock AS
+ *      Portions copyright 2013-2014 ForgeRock AS
  */
 package org.opends.server.protocols.jmx;
 
@@ -35,16 +35,14 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.opends.messages.Message;
 import org.opends.server.admin.server.ConfigurationChangeListener;
 import org.opends.server.admin.std.server.ConnectionHandlerCfg;
 import org.opends.server.admin.std.server.JMXConnectionHandlerCfg;
-import org.opends.server.api.AlertGenerator;
 import org.opends.server.api.ClientConnection;
 import org.opends.server.api.ConnectionHandler;
 import org.opends.server.api.ServerShutdownListener;
@@ -68,14 +66,14 @@ import org.opends.server.util.StaticUtils;
  */
 public final class JmxConnectionHandler extends
     ConnectionHandler<JMXConnectionHandlerCfg> implements
-    ServerShutdownListener, AlertGenerator,
+    ServerShutdownListener,
     ConfigurationChangeListener<JMXConnectionHandlerCfg> {
 
   private static final String WILDCARD_ADDRESS = "0.0.0.0";
 
   /**
    * Key that may be placed into a JMX connection environment map to
-   * provide a custom <code>javax.net.ssl.TrustManager</code> array
+   * provide a custom {@code javax.net.ssl.TrustManager} array
    * for a connection.
    */
   public static final String TRUST_MANAGER_ARRAY_KEY =
@@ -86,7 +84,7 @@ public final class JmxConnectionHandler extends
     "org.opends.server.protocols.jmx.JMXConnectionHandler";
 
   /** The list of active client connection. */
-  private List<ClientConnection> connectionList;
+  private final List<ClientConnection> connectionList;
 
   /** The current configuration state. */
   private JMXConnectionHandlerCfg currentConfig;
@@ -101,7 +99,7 @@ public final class JmxConnectionHandler extends
   private String protocol;
 
   /** The set of listeners for this connection handler. */
-  private List<HostPort> listeners = new LinkedList<HostPort>();
+  private final List<HostPort> listeners = new LinkedList<HostPort>();
 
   /**
    * Creates a new instance of this JMX connection handler. It must be
@@ -110,7 +108,7 @@ public final class JmxConnectionHandler extends
   public JmxConnectionHandler() {
     super("JMX Connection Handler Thread");
 
-    this.connectionList = new LinkedList<ClientConnection>();
+    this.connectionList = new CopyOnWriteArrayList<ClientConnection>();
   }
 
 
@@ -123,7 +121,7 @@ public final class JmxConnectionHandler extends
       JMXConnectionHandlerCfg config) {
     // Create variables to include in the response.
     ResultCode resultCode = ResultCode.SUCCESS;
-    List<Message> messages = new ArrayList<Message>();
+    final List<Message> messages = new ArrayList<Message>();
 
     // Determine whether or not the RMI connection needs restarting.
     boolean rmiConnectorRestart = false;
@@ -200,42 +198,6 @@ public final class JmxConnectionHandler extends
     // We should also close the RMI registry.
     rmiConnector.finalizeConnectionHandler(true);
   }
-
-
-
-  /**
-   * Retrieves information about the set of alerts that this generator
-   * may produce. The map returned should be between the notification
-   * type for a particular notification and the human-readable
-   * description for that notification. This alert generator must not
-   * generate any alerts with types that are not contained in this
-   * list.
-   *
-   * @return Information about the set of alerts that this generator
-   *         may produce.
-   */
-  @Override
-  public Map<String, String> getAlerts()
-  {
-    Map<String, String> alerts = new LinkedHashMap<String, String>();
-
-    return alerts;
-  }
-
-
-
-  /**
-   * Retrieves the fully-qualified name of the Java class for this
-   * alert generator implementation.
-   *
-   * @return The fully-qualified name of the Java class for this alert
-   *         generator implementation.
-   */
-  @Override
-  public String getClassName() {
-    return CLASS_NAME;
-  }
-
 
 
   /**
@@ -495,6 +457,16 @@ public final class JmxConnectionHandler extends
     connectionList.add(connection);
   }
 
+
+  /**
+   * Unregisters a client connection from this JMX connection handler.
+   *
+   * @param connection
+   *          The client connection.
+   */
+  public void unregisterClientConnection(ClientConnection connection) {
+    connectionList.remove(connection);
+  }
 
 
   /**

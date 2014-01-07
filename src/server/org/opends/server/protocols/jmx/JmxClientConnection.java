@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.protocols.jmx;
 
@@ -138,7 +138,6 @@ public class JmxClientConnection
   {
     JMXConnectionNotification jcn ;
 
-    //
     // We don't have the expected notification
     if ( ! (notif instanceof JMXConnectionNotification))
     {
@@ -149,7 +148,6 @@ public class JmxClientConnection
       jcn = (JMXConnectionNotification) notif ;
     }
 
-    //
     // The only handled notifications are CLOSED and FAILED
     if ((!jcn.getType().equals(JMXConnectionNotification.CLOSED))
         && (!jcn.getType().equals(JMXConnectionNotification.FAILED)))
@@ -157,14 +155,12 @@ public class JmxClientConnection
       return;
     }
 
-    //
     // Check if the closed connection corresponds to the current connection
     if (!(jcn.getConnectionId().equals(jmxConnectionID)))
     {
       return;
     }
 
-    //
     // Ok, we can perform the unbind: call finalize
     disconnect(DisconnectReason.CLIENT_DISCONNECT, false, null);
   }
@@ -968,9 +964,8 @@ public class JmxClientConnection
       return;
     }
     disconnectStarted = true ;
+    jmxConnectionHandler.unregisterClientConnection(this);
     finalizeConnectionInternal();
-
-
 
     // unbind the underlying connection
     try
