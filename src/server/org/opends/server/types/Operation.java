@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions copyright 2011-2013 ForgeRock AS.
+ *      Portions copyright 2011-2014 ForgeRock AS.
  */
 package org.opends.server.types;
 
@@ -192,16 +192,6 @@ public interface Operation extends Runnable
    *                  controls for this operation.
    */
   public abstract void addRequestControl(Control control);
-
-  /**
-   * Removes the provided control from the set of request controls for
-   * this operation.  This method may only be called by pre-parse
-   * plugins.
-   *
-   * @param  control  The control to remove from the set of request
-   *                  controls for this operation.
-   */
-  public abstract void removeRequestControl(Control control);
 
   /**
    * Retrieves the set of controls to include in the response to the

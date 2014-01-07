@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.types;
 
@@ -398,22 +398,6 @@ public abstract class AbstractOperation
 
 
   /**
-   * Removes the provided control from the set of request controls for
-   * this operation.  This method may only be called by pre-parse
-   * plugins.
-   *
-   * @param  control  The control to remove from the set of request
-   *                  controls for this operation.
-   */
-  @Override
-  public final void removeRequestControl(Control control)
-  {
-    requestControls.remove(control);
-  }
-
-
-
-  /**
    * Retrieves the result code for this operation.
    *
    * @return  The result code associated for this operation, or
@@ -513,14 +497,11 @@ public abstract class AbstractOperation
   @Override
   public List<AdditionalLogItem> getAdditionalLogItems()
   {
-    if (additionalLogItems == null)
-    {
-      return Collections.emptyList();
-    }
-    else
+    if (additionalLogItems != null)
     {
       return Collections.unmodifiableList(additionalLogItems);
     }
+    return Collections.emptyList();
   }
 
 
@@ -763,14 +744,11 @@ public abstract class AbstractOperation
   @Override
   public final DN getAuthorizationDN()
   {
-    if (authorizationEntry == null)
-    {
-      return DN.nullDN();
-    }
-    else
+    if (authorizationEntry != null)
     {
       return authorizationEntry.getDN();
     }
+    return DN.nullDN();
   }
 
 
@@ -1061,7 +1039,7 @@ public abstract class AbstractOperation
   @Override
   public final long getProcessingTime()
   {
-    return (processingStopTime - processingStartTime);
+    return processingStopTime - processingStartTime;
   }
 
 
@@ -1081,12 +1059,9 @@ public abstract class AbstractOperation
   {
     if(useNanoTime)
     {
-      return (processingStopNanoTime - processingStartNanoTime);
+      return processingStopNanoTime - processingStartNanoTime;
     }
-    else
-    {
-      return -1;
-    }
+    return -1;
   }
 
 

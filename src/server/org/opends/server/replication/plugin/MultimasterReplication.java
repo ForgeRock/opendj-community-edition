@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.plugin;
 
@@ -33,9 +33,7 @@ import static org.opends.server.replication.plugin.
 ReplicationRepairRequestControl.*;
 import static org.opends.server.util.StaticUtils.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -130,8 +128,10 @@ public class MultimasterReplication
          * code running later do not generate ChangeNumber, solve conflicts
          * and forward the operation to the replication server.
          */
-        for (Control c : op.getRequestControls())
+        final List<Control> controls = op.getRequestControls();
+        for (Iterator<Control> iter = controls.iterator(); iter.hasNext();)
         {
+          Control c = iter.next();
           if (c.getOID().equals(OID_REPLICATION_REPAIR_CONTROL))
           {
             op.setSynchronizationOperation(true);
@@ -142,25 +142,20 @@ public class MultimasterReplication
             fail if it finds a control that it does not know about and
             that is marked as critical.
             */
-            List<Control> controls = op.getRequestControls();
-            controls.remove(c);
+            iter.remove();
             return null;
           }
         }
     }
 
 
-    LDAPReplicationDomain domain;
+    LDAPReplicationDomain domain = null;
     DN temp = dn;
-    do
+    while (domain == null && temp != null)
     {
       domain = domains.get(temp);
       temp = temp.getParentDNInSuffix();
-      if (temp == null)
-      {
-        break;
-      }
-    } while (domain == null);
+    }
 
     return domain;
   }

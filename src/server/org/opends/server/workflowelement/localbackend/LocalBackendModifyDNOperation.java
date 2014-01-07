@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.workflowelement.localbackend;
 
@@ -687,6 +687,8 @@ modifyDNProcessing:
   protected void handleRequestControls()
           throws DirectoryException
   {
+    LocalBackendWorkflowElement.removeAllDisallowedControls(entryDN, this);
+
     List<Control> requestControls = getRequestControls();
     if ((requestControls != null) && (! requestControls.isEmpty()))
     {
@@ -694,12 +696,6 @@ modifyDNProcessing:
       {
         Control c   = requestControls.get(i);
         String  oid = c.getOID();
-
-        if (!LocalBackendWorkflowElement.isControlAllowed(entryDN, this, c))
-        {
-          // Skip disallowed non-critical controls.
-          continue;
-        }
 
         if (oid.equals(OID_LDAP_ASSERTION))
         {
@@ -1039,8 +1035,6 @@ modifyDNProcessing:
    *          {@code false} if not.
    */
   protected boolean handleConflictResolution() {
-      boolean returnVal = true;
-
       for (SynchronizationProvider<?> provider :
           DirectoryServer.getSynchronizationProviders()) {
           try {
@@ -1051,8 +1045,7 @@ modifyDNProcessing:
                   appendErrorMessage(result.getErrorMessage());
                   setMatchedDN(result.getMatchedDN());
                   setReferralURLs(result.getReferralURLs());
-                  returnVal = false;
-                  break;
+                  return false;
               }
           } catch (DirectoryException de) {
               if (debugEnabled()) {
@@ -1063,11 +1056,10 @@ modifyDNProcessing:
                       getExceptionMessage(de)));
 
               setResponseData(de);
-              returnVal = false;
-              break;
+              return false;
           }
       }
-      return returnVal;
+      return true;
   }
 
   /**
@@ -1076,8 +1068,6 @@ modifyDNProcessing:
    *          {@code false} if not.
    */
   protected boolean processPreOperation() {
-      boolean returnVal = true;
-
       for (SynchronizationProvider<?> provider :
           DirectoryServer.getSynchronizationProviders()) {
           try {
@@ -1088,8 +1078,7 @@ modifyDNProcessing:
                   appendErrorMessage(result.getErrorMessage());
                   setMatchedDN(result.getMatchedDN());
                   setReferralURLs(result.getReferralURLs());
-                  returnVal = false;
-                  break;
+                  return false;
               }
           } catch (DirectoryException de) {
               if (debugEnabled()) {
@@ -1098,11 +1087,10 @@ modifyDNProcessing:
               logError(ERR_MODDN_SYNCH_PREOP_FAILED.get(getConnectionID(),
                       getOperationID(), getExceptionMessage(de)));
               setResponseData(de);
-              returnVal = false;
-              break;
+              return false;
           }
       }
-      return returnVal;
+      return true;
   }
 
   /**
@@ -1120,7 +1108,7 @@ modifyDNProcessing:
               logError(ERR_MODDN_SYNCH_POSTOP_FAILED.get(getConnectionID(),
                       getOperationID(), getExceptionMessage(de)));
               setResponseData(de);
-              break;
+              return;
           }
       }
   }

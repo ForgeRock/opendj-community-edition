@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2012 ForgeRock AS.
+ *      Portions copyright 2011-2014 ForgeRock AS.
  */
 package org.opends.server.core;
 import org.opends.messages.MessageBuilder;
@@ -412,10 +412,12 @@ public class ExtendedOperationBasis
       // Look at the controls included in the request and ensure that all
       // critical controls are supported by the handler.
       List<Control> requestControls = getRequestControls();
-      if ((requestControls != null) && (! requestControls.isEmpty()))
+      if (requestControls != null && !requestControls.isEmpty())
       {
-        for (Control c : requestControls)
+        for (Iterator<Control> iter = requestControls.iterator(); iter
+            .hasNext();)
         {
+          final Control c = iter.next();
           try
           {
             if (!AccessControlConfigManager.getInstance()
@@ -433,7 +435,7 @@ public class ExtendedOperationBasis
               {
                 // We don't want to process this non-critical control, so
                 // remove it.
-                removeRequestControl(c);
+                iter.remove();
                 continue;
               }
             }

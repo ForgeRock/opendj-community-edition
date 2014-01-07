@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.workflowelement.localbackend;
 
@@ -382,19 +382,15 @@ compareProcessing:
   protected void handleRequestControls()
           throws DirectoryException
   {
+    LocalBackendWorkflowElement.removeAllDisallowedControls(entryDN, this);
+
     List<Control> requestControls = getRequestControls();
-    if ((requestControls != null) && (! requestControls.isEmpty()))
+    if (requestControls != null && !requestControls.isEmpty())
     {
       for (int i=0; i < requestControls.size(); i++)
       {
         Control c   = requestControls.get(i);
         String  oid = c.getOID();
-
-        if (!LocalBackendWorkflowElement.isControlAllowed(entryDN, this, c))
-        {
-          // Skip disallowed non-critical controls.
-          continue;
-        }
 
         if (oid.equals(OID_LDAP_ASSERTION))
         {

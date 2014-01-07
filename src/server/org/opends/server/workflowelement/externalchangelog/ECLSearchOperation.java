@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2010-2012 ForgeRock AS
+ *      Portions Copyright 2010-2014 ForgeRock AS
  */
 package org.opends.server.workflowelement.externalchangelog;
 
@@ -401,10 +401,10 @@ public class ECLSearchOperation
     List<Control> requestControls  = getRequestControls();
     if ((requestControls != null) && (! requestControls.isEmpty()))
     {
-      for (int i=0; i < requestControls.size(); i++)
+      for (Iterator<Control> iter = requestControls.iterator(); iter.hasNext();)
       {
-        Control c   = requestControls.get(i);
-        String  oid = c.getOID();
+        final Control c = iter.next();
+        final String oid = c.getOID();
 
         if (!AccessControlConfigManager.getInstance().getAccessControlHandler()
             .isAllowed(baseDN, this, c))
@@ -416,12 +416,9 @@ public class ECLSearchOperation
                 ResultCode.UNAVAILABLE_CRITICAL_EXTENSION,
                 ERR_CONTROL_INSUFFICIENT_ACCESS_RIGHTS.get(oid));
           }
-          else
-          {
-            // We don't want to process this non-critical control, so remove it.
-            removeRequestControl(c);
-            continue;
-          }
+          // We don't want to process this non-critical control, so remove it.
+          iter.remove();
+          continue;
         }
 
         if (oid.equals(OID_ECL_COOKIE_EXCHANGE_CONTROL))

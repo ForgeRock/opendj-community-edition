@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.core;
 
@@ -407,15 +407,6 @@ public class OperationWrapper<W extends Operation> implements Operation
   public Object removeAttachment(String name)
   {
     return operation.removeAttachment(name);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void removeRequestControl(Control control)
-  {
-    operation.removeRequestControl(control);
   }
 
   /**

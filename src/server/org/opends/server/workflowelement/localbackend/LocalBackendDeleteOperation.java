@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.workflowelement.localbackend;
 
@@ -480,23 +480,16 @@ deleteProcessing:
    * @throws  DirectoryException  If a problem occurs that should cause the
    *                              operation to fail.
    */
-  protected void handleRequestControls()
-          throws DirectoryException
+  private void handleRequestControls() throws DirectoryException
   {
+    LocalBackendWorkflowElement.removeAllDisallowedControls(entryDN, this);
+
     List<Control> requestControls = getRequestControls();
-    if ((requestControls != null) && (! requestControls.isEmpty()))
+    if (requestControls != null && !requestControls.isEmpty())
     {
-      for (int i=0; i < requestControls.size(); i++)
+      for (Control c : requestControls)
       {
-        Control c   = requestControls.get(i);
-        String  oid = c.getOID();
-
-        if (!LocalBackendWorkflowElement.isControlAllowed(entryDN, this, c))
-        {
-          // Skip disallowed non-critical controls.
-          continue;
-        }
-
+        final String oid = c.getOID();
         if (oid.equals(OID_LDAP_ASSERTION))
         {
           LDAPAssertionRequestControl assertControl =
@@ -535,8 +528,7 @@ deleteProcessing:
             if (!filter.matchesEntry(entry))
             {
               throw new DirectoryException(ResultCode.ASSERTION_FAILED,
-                  ERR_DELETE_ASSERTION_FAILED.get(String
-                      .valueOf(entryDN)));
+                  ERR_DELETE_ASSERTION_FAILED.get(String.valueOf(entryDN)));
             }
           }
           catch (DirectoryException de)
@@ -636,15 +628,12 @@ deleteProcessing:
   }
 
 
-
   /**
    * Handle conflict resolution.
    * @return  {@code true} if processing should continue for the operation, or
    *          {@code false} if not.
    */
   protected boolean handleConflictResolution() {
-      boolean returnVal = true;
-
       for (SynchronizationProvider<?> provider :
           DirectoryServer.getSynchronizationProviders()) {
           try {
@@ -655,8 +644,7 @@ deleteProcessing:
                   appendErrorMessage(result.getErrorMessage());
                   setMatchedDN(result.getMatchedDN());
                   setReferralURLs(result.getReferralURLs());
-                  returnVal = false;
-                  break;
+                  return false;
               }
           } catch (DirectoryException de) {
               if (debugEnabled()) {
@@ -666,11 +654,10 @@ deleteProcessing:
                       getConnectionID(), getOperationID(),
                       getExceptionMessage(de)));
               setResponseData(de);
-              returnVal = false;
-              break;
+              return false;
           }
       }
-      return returnVal;
+      return true;
   }
 
   /**
@@ -690,7 +677,7 @@ deleteProcessing:
               logError(ERR_DELETE_SYNCH_POSTOP_FAILED.get(getConnectionID(),
                       getOperationID(), getExceptionMessage(de)));
               setResponseData(de);
-              break;
+              return;
           }
       }
   }
@@ -701,8 +688,6 @@ deleteProcessing:
    *          {@code false} if not.
    */
   protected boolean processPreOperation() {
-      boolean returnVal = true;
-
       for (SynchronizationProvider<?> provider :
           DirectoryServer.getSynchronizationProviders()) {
           try {
@@ -713,8 +698,7 @@ deleteProcessing:
                   appendErrorMessage(result.getErrorMessage());
                   setMatchedDN(result.getMatchedDN());
                   setReferralURLs(result.getReferralURLs());
-                  returnVal = false;
-                  break;
+                  return false;
               }
           } catch (DirectoryException de) {
               if (debugEnabled())
@@ -724,11 +708,10 @@ deleteProcessing:
               logError(ERR_DELETE_SYNCH_PREOP_FAILED.get(getConnectionID(),
                       getOperationID(), getExceptionMessage(de)));
               setResponseData(de);
-              returnVal = false;
-              break;
+              return false;
           }
       }
-      return returnVal;
+      return true;
   }
 }
 

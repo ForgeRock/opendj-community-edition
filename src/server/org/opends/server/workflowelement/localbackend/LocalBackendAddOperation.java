@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.workflowelement.localbackend;
 
@@ -1436,19 +1436,15 @@ addProcessing:
   protected void processControls(DN parentDN)
           throws DirectoryException
   {
+    LocalBackendWorkflowElement.removeAllDisallowedControls(parentDN, this);
+
     List<Control> requestControls = getRequestControls();
-    if ((requestControls != null) && (! requestControls.isEmpty()))
+    if (requestControls != null && !requestControls.isEmpty())
     {
       for (int i=0; i < requestControls.size(); i++)
       {
         Control c   = requestControls.get(i);
         String  oid = c.getOID();
-
-        if (!LocalBackendWorkflowElement.isControlAllowed(parentDN, this, c))
-        {
-          // Skip disallowed non-critical controls.
-          continue;
-        }
 
         if (oid.equals(OID_LDAP_ASSERTION))
         {
@@ -1530,8 +1526,7 @@ addProcessing:
 
           // The requester must have the PROXIED_AUTH privilige in order to
           // be able to use this control.
-          if (! getClientConnection().hasPrivilege(Privilege.PROXIED_AUTH,
-                                                   this))
+          if (!getClientConnection().hasPrivilege(Privilege.PROXIED_AUTH, this))
           {
             throw new DirectoryException(ResultCode.AUTHORIZATION_DENIED,
                            ERR_PROXYAUTH_INSUFFICIENT_PRIVILEGES.get());
