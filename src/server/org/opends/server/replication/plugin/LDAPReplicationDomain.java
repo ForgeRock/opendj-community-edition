@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.plugin;
 
@@ -2295,14 +2295,8 @@ public final class LDAPReplicationDomain extends ReplicationDomain
         }
         else
         {
-          try
-          {
-            addEntryAttributesForCL(msg,op);
-          }
-          catch(Exception e)
-          {
-            TRACER.debugCaught(DebugLogLevel.ERROR, e);
-          }
+          addEntryAttributesForCL(msg,op);
+
           // If assured replication is configured, this will prepare blocking
           // mechanism. If assured replication is disabled, this returns
           // immediately
@@ -4089,11 +4083,13 @@ private boolean solveNamingConflict(ModifyDNOperation op,
 
   /**
    * Process backend before import.
-   * @param backend The backend.
-   * @throws Exception
+   *
+   * @param backend
+   *          The backend.
+   * @throws DirectoryException
+   *           If the backend could not be disabled or locked exclusively.
    */
-  private void preBackendImport(Backend backend)
-  throws Exception
+  private void preBackendImport(Backend backend) throws DirectoryException
   {
     // Stop saving state
     stateSavingDisabled = true;
@@ -4939,8 +4935,23 @@ private boolean solveNamingConflict(ModifyDNOperation op,
     {
       LDAPUpdateMsg msg = (LDAPUpdateMsg) updateMsg;
 
-      // put the UpdateMsg in the RemotePendingChanges list.
-      remotePendingChanges.putRemoteUpdate(msg);
+      // Put the UpdateMsg in the RemotePendingChanges list.
+      if (!remotePendingChanges.putRemoteUpdate(msg))
+      {
+        /*
+         * Already received this change so ignore it. This may happen if there
+         * are uncommitted changes in the queue and session failover occurs
+         * causing a recovery of all changes since the current committed server
+         * state. See OPENDJ-1115.
+         */
+        if (debugEnabled())
+        {
+          TRACER.debugInfo(
+                  "LDAPReplicationDomain.processUpdate: ignoring "
+                  + "duplicate change %s", msg.getChangeNumber());
+        }
+        return true;
+      }
 
       // Put update message into the replay queue
       // (block until some place in the queue is available)
@@ -5058,10 +5069,9 @@ private boolean solveNamingConflict(ModifyDNOperation op,
    * attributes to the UpdateMsg.
    * @param msg an replication update message
    * @param op  the operation in progress
-   * @throws DirectoryException
    */
   private void addEntryAttributesForCL(UpdateMsg msg,
-      PostOperationOperation op) throws DirectoryException
+      PostOperationOperation op)
   {
     if (op instanceof PostOperationDeleteOperation)
     {

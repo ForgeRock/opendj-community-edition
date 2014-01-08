@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2007-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2013 ForgeRock AS.
+ *      Portions Copyright 2013-2014 ForgeRock AS.
  */
 package org.opends.server.replication.plugin;
 
@@ -64,7 +64,7 @@ public final class RemotePendingChanges
   /**
    * A map used to store the pending changes.
    */
-  private SortedMap<ChangeNumber, PendingChange> pendingChanges =
+  private final SortedMap<ChangeNumber, PendingChange> pendingChanges =
     new TreeMap<ChangeNumber, PendingChange>();
 
   /**
@@ -72,13 +72,13 @@ public final class RemotePendingChanges
    * not been replayed correctly because they are dependent on
    * another change to be completed.
    */
-  private SortedSet<PendingChange> dependentChanges =
+  private final SortedSet<PendingChange> dependentChanges =
     new TreeSet<PendingChange>();
 
   /**
    * The ServerState that will be updated when LDAPUpdateMsg are fully replayed.
    */
-  private ServerState state;
+  private final ServerState state;
 
   /**
    * Creates a new RemotePendingChanges using the provided ServerState.
@@ -107,12 +107,14 @@ public final class RemotePendingChanges
    *
    * @param update The LDAPUpdateMsg that was received from the replication
    *               server and that will be added to the pending list.
+   * @return {@code false} if the update was already registered in the pending
+   *         changes.
    */
-  public synchronized void putRemoteUpdate(LDAPUpdateMsg update)
+  public synchronized boolean putRemoteUpdate(LDAPUpdateMsg update)
   {
     ChangeNumber changeNumber = update.getChangeNumber();
-    pendingChanges.put(changeNumber, new PendingChange(changeNumber, null,
-                                                        update));
+    return pendingChanges.put(changeNumber,
+        new PendingChange(changeNumber, null, update)) == null;
   }
 
   /**
