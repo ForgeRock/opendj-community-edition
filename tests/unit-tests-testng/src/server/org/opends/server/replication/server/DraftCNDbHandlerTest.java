@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2009-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
 
@@ -156,14 +156,11 @@ public class DraftCNDbHandlerTest extends ReplicationTestCase
       handler.setPurgeDelay(100);
 
       // Check the db is cleared.
-      while(handler.count()!=0)
+      while(handler.count() > 1)
       {
-        Thread.sleep(200);
+        Thread.yield();
       }
-      assertEquals(handler.getFirstKey(), 0);
-      assertEquals(handler.getLastKey(), 0);
-
-
+      assertOnlyNewestRecordIsLeft(handler, sn3);
     } finally
     {
       if (handler != null)
@@ -226,8 +223,7 @@ public class DraftCNDbHandlerTest extends ReplicationTestCase
       handler = new DraftCNDbHandler(replicationServer, dbEnv);
       handler.setPurgeDelay(0);
 
-      //
-      assertTrue(handler.count()==0);
+      assertEquals(handler.count(), 0);
 
       // Prepare data to be stored in the db
       int sn1 = 3;
@@ -303,13 +299,15 @@ public class DraftCNDbHandlerTest extends ReplicationTestCase
       }
 
       // Clear ...
-      handler.clear();
+      // check only the last record is left
+      handler.clear(null);
+      assertOnlyNewestRecordIsLeft(handler, sn3);
 
       // Check the db is cleared.
+      handler.clear();
       assertEquals(handler.getFirstKey(), 0);
       assertEquals(handler.getLastKey(), 0);
-      assertTrue(handler.count()==0);
-
+      assertEquals(handler.count(), 0);
     } finally
     {
       if (handler != null)
@@ -321,5 +319,17 @@ public class DraftCNDbHandlerTest extends ReplicationTestCase
       if (testRoot != null)
         TestCaseUtils.deleteDirectory(testRoot);
     }
+  }
+
+  /**
+   * The newest record is no longer cleared to ensure persistence to the last
+   * generated change number across server restarts.
+   */
+  private void assertOnlyNewestRecordIsLeft(DraftCNDbHandler handler, int lastDraftCN) throws Exception
+  {
+    assertEquals(handler.count(), 1);
+    final int firstDraftCN = handler.getFirstKey();
+    assertEquals(firstDraftCN, lastDraftCN);
+    assertEquals(firstDraftCN, handler.getLastKey());
   }
 }

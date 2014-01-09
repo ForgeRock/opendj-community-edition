@@ -23,9 +23,10 @@
  *
  *
  *      Copyright 2009-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
+
 import static org.opends.messages.ReplicationMessages.*;
 import static org.opends.server.loggers.ErrorLogger.logError;
 import static org.opends.server.loggers.debug.DebugLogger.debugEnabled;
@@ -74,6 +75,13 @@ public class DraftCNDbHandler implements Runnable
 
   private DraftCNDB db;
   private int firstkey = NO_KEY;
+  /**
+   * The newest draft changenumber stored in the DB. It is used to avoid
+   * trimming the record with the newest changenumber. The newest record in the
+   * changenumber index DB is used to persist the
+   * {@link ReplicationServer#lastGeneratedDraftCN} which is then retrieved
+   * on server startup.
+   */
   private int lastkey = NO_KEY;
   private DbMonitorProvider dbMonitor = new DbMonitorProvider();
   private boolean shutdown = false;
@@ -137,6 +145,7 @@ public class DraftCNDbHandler implements Runnable
       ChangeNumber cn)
   {
     db.addEntry(key, value, serviceID, cn);
+    lastkey = key;
 
     if (debugEnabled())
       TRACER.debugInfo(
@@ -317,7 +326,7 @@ public class DraftCNDbHandler implements Runnable
   /**
    * Clear the changes from this DB (from both memory cache and DB storage)
    * for the provided serviceID.
-   * @param serviceIDToClear The serviceID for which we want to remove
+   * @param baseDNToClear The baseDN for which we want to remove
    *         all records from the DraftCNDb - null means all.
    * @throws DatabaseException When an exception occurs while removing the
    * changes from the DB.
@@ -325,7 +334,7 @@ public class DraftCNDbHandler implements Runnable
    * from the DB.
    *
    */
-  public void clear(String serviceIDToClear)
+  public void clear(String baseDNToClear)
       throws DatabaseException, Exception
   {
     if (this.count() == 0)
@@ -350,20 +359,33 @@ public class DraftCNDbHandler implements Runnable
             return;
           }
 
+          int draftCN = cursor.currentKey();
+          if (draftCN != firstkey)
+          {
+            firstkey = draftCN;
+          }
+          if (draftCN == lastkey)
+          {
+            // do not trim the newest record to avoid having the last generated
+            // draft changenumber dropping back to 0 if the server restarts
+            cursor.close();
+            return;
+          }
+
           ChangeNumber cn = cursor.currentChangeNumber();
 
           // From the draftCNDb change record, get the domain and changeNumber
-          String serviceID = cursor.currentServiceID();
+          String baseDN = cursor.currentServiceID();
 
-          if ((serviceIDToClear != null)
-              && (serviceIDToClear.equalsIgnoreCase(serviceID)))
+          if ((baseDNToClear != null)
+              && (baseDNToClear.equalsIgnoreCase(baseDN)))
           {
             cursor.delete();
             continue;
           }
 
           ReplicationServerDomain domain = replicationServer
-              .getReplicationServerDomain(serviceID, false);
+              .getReplicationServerDomain(baseDN, false);
 
           if (domain == null)
           {
@@ -380,8 +402,7 @@ public class DraftCNDbHandler implements Runnable
           // reading
           domain.getEligibleState(crossDomainEligibleCN);
 
-          ChangeNumber fcn = startState.getMaxChangeNumber(cn
-              .getServerId());
+          ChangeNumber fcn = startState.getMaxChangeNumber(cn.getServerId());
 
           int currentKey = cursor.currentKey();
 
@@ -397,7 +418,7 @@ public class DraftCNDbHandler implements Runnable
             Map<String,ServerState> cnStartStates =
                 MultiDomainServerState.splitGenStateToServerStates(
                         cursor.currentValue());
-            cnVector = cnStartStates.get(serviceID);
+            cnVector = cnStartStates.get(baseDN);
 
             if (debugEnabled())
               TRACER.debugInfo("DraftCNDBHandler:clear() - ChangeVector:"+
@@ -490,7 +511,7 @@ public class DraftCNDbHandler implements Runnable
   @Override
   public String toString()
   {
-    return("draftCNdb:" + " " + firstkey + " " + lastkey);
+    return getClass().getSimpleName() + ": " + firstkey + " " + lastkey;
   }
 
   /**

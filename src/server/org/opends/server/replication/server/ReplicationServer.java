@@ -23,11 +23,9 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
-
-
 
 import static org.opends.messages.ReplicationMessages.*;
 import static org.opends.server.loggers.ErrorLogger.logError;
@@ -43,6 +41,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 import org.opends.messages.Category;
@@ -151,7 +150,7 @@ public final class ReplicationServer
   //
   // Guarded by draftCNLock
   //
-  private int lastGeneratedDraftCN = 0;
+  private final AtomicInteger lastGeneratedDraftCN = new AtomicInteger();
 
   // Used for protecting draft CN related state.
   private final Object draftCNLock = new Object();
@@ -930,7 +929,7 @@ public final class ReplicationServer
 
         try
         {
-          lastGeneratedDraftCN = draftCNDbHandler.getLastKey();
+          lastGeneratedDraftCN.set(draftCNDbHandler.getLastKey());
         }
         catch (Exception e)
         {
@@ -1475,7 +1474,7 @@ public final class ReplicationServer
           }
         }
 
-        lastGeneratedDraftCN = 0;
+        lastGeneratedDraftCN.set(0);
         draftCNDbHandler = null;
       }
     }
@@ -1722,7 +1721,7 @@ public final class ReplicationServer
         if (draftCNDbHandler == null)
         {
           draftCNDbHandler = new DraftCNDbHandler(this, this.dbEnv);
-          lastGeneratedDraftCN = getLastDraftChangeNumber();
+          lastGeneratedDraftCN.set(getLastDraftChangeNumber());
         }
         return draftCNDbHandler;
       }
@@ -1783,7 +1782,7 @@ public final class ReplicationServer
   {
     synchronized (draftCNLock)
     {
-      return ++lastGeneratedDraftCN;
+      return lastGeneratedDraftCN.incrementAndGet();
     }
   }
 
@@ -1919,7 +1918,7 @@ public final class ReplicationServer
     {
       // The database was empty, just keep increasing numbers since last time
       // we generated one DraftCN.
-      long tmpLastGeneratedDraftCN = lastGeneratedDraftCN;
+      long tmpLastGeneratedDraftCN = lastGeneratedDraftCN.get();
       firstDraftCN += tmpLastGeneratedDraftCN;
       lastDraftCN += tmpLastGeneratedDraftCN;
     }
