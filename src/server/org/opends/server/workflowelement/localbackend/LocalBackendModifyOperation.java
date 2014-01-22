@@ -576,21 +576,8 @@ modifyProcessing:
 
         try
         {
-          try
-          {
-            checkWritability();
-          }
-          catch (DirectoryException de)
-          {
-            if (debugEnabled())
-            {
-              TRACER.debugCaught(DebugLogLevel.ERROR, de);
-            }
-
-            setResponseData(de);
-            break modifyProcessing;
-          }
-
+          LocalBackendWorkflowElement.checkIfBackendIsWritable(backend, this,
+              entryDN, ERR_MODIFY_SERVER_READONLY, ERR_MODIFY_BACKEND_READONLY);
 
           if (noOp)
           {
@@ -2034,56 +2021,6 @@ modifyProcessing:
 
     modifications.addAll(pwPolicyState.getModifications());
     modifiedEntry.applyModifications(pwPolicyState.getModifications());
-  }
-
-
-
-  /**
-   * Checks to ensure that both the Directory Server and the backend are
-   * writable.
-   *
-   * @throws  DirectoryException  If the modify operation should not be allowed
-   *                              as a result of the writability check.
-   */
-  protected void checkWritability()
-          throws DirectoryException
-  {
-    // If it is not a private backend, then check to see if the server or
-    // backend is operating in read-only mode.
-    if (! backend.isPrivateBackend())
-    {
-      switch (DirectoryServer.getWritabilityMode())
-      {
-        case DISABLED:
-          throw new DirectoryException(ResultCode.UNWILLING_TO_PERFORM,
-                                       ERR_MODIFY_SERVER_READONLY.get(
-                                            String.valueOf(entryDN)));
-
-        case INTERNAL_ONLY:
-          if (! (isInternalOperation() || isSynchronizationOperation()))
-          {
-            throw new DirectoryException(ResultCode.UNWILLING_TO_PERFORM,
-                                         ERR_MODIFY_SERVER_READONLY.get(
-                                              String.valueOf(entryDN)));
-          }
-      }
-
-      switch (backend.getWritabilityMode())
-      {
-        case DISABLED:
-          throw new DirectoryException(ResultCode.UNWILLING_TO_PERFORM,
-                                       ERR_MODIFY_BACKEND_READONLY.get(
-                                            String.valueOf(entryDN)));
-
-        case INTERNAL_ONLY:
-          if (! isInternalOperation() || isSynchronizationOperation())
-          {
-            throw new DirectoryException(ResultCode.UNWILLING_TO_PERFORM,
-                                         ERR_MODIFY_BACKEND_READONLY.get(
-                                              String.valueOf(entryDN)));
-          }
-      }
-    }
   }
 
 

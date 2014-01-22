@@ -523,47 +523,8 @@ modifyDNProcessing:
         // care of any synchronization that might be needed.
         try
         {
-          // If it is not a private backend, then check to see if the server or
-          // backend is operating in read-only mode.
-          if (! currentBackend.isPrivateBackend())
-          {
-            switch (DirectoryServer.getWritabilityMode())
-            {
-              case DISABLED:
-                setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                appendErrorMessage(ERR_MODDN_SERVER_READONLY.get(
-                                        String.valueOf(entryDN)));
-                break modifyDNProcessing;
-
-              case INTERNAL_ONLY:
-                if (! (isInternalOperation() || isSynchronizationOperation()))
-                {
-                  setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                  appendErrorMessage(ERR_MODDN_SERVER_READONLY.get(
-                                          String.valueOf(entryDN)));
-                  break modifyDNProcessing;
-                }
-            }
-
-            switch (currentBackend.getWritabilityMode())
-            {
-              case DISABLED:
-                setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                appendErrorMessage(ERR_MODDN_BACKEND_READONLY.get(
-                                        String.valueOf(entryDN)));
-                break modifyDNProcessing;
-
-              case INTERNAL_ONLY:
-                if (! (isInternalOperation() || isSynchronizationOperation()))
-                {
-                  setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                  appendErrorMessage(ERR_MODDN_BACKEND_READONLY.get(
-                                          String.valueOf(entryDN)));
-                  break modifyDNProcessing;
-                }
-            }
-          }
-
+          LocalBackendWorkflowElement.checkIfBackendIsWritable(backend, this,
+            entryDN, ERR_MODDN_SERVER_READONLY, ERR_MODDN_BACKEND_READONLY);
 
           if (noOp)
           {

@@ -562,53 +562,11 @@ addProcessing:
           }
         }
 
-
-        // If it is not a private backend, then check to see if the server or
-        // backend is operating in read-only mode.
-        if (! backend.isPrivateBackend())
-        {
-          switch (DirectoryServer.getWritabilityMode())
-          {
-            case DISABLED:
-              setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-              appendErrorMessage(ERR_ADD_SERVER_READONLY.get(
-                                      String.valueOf(entryDN)));
-              break addProcessing;
-
-            case INTERNAL_ONLY:
-              if (! (isInternalOperation() || isSynchronizationOperation()))
-              {
-                setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                appendErrorMessage(ERR_ADD_SERVER_READONLY.get(
-                                        String.valueOf(entryDN)));
-                break addProcessing;
-              }
-              break;
-          }
-
-          switch (backend.getWritabilityMode())
-          {
-            case DISABLED:
-              setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-              appendErrorMessage(ERR_ADD_BACKEND_READONLY.get(
-                                      String.valueOf(entryDN)));
-              break addProcessing;
-
-            case INTERNAL_ONLY:
-              if (! (isInternalOperation() || isSynchronizationOperation()))
-              {
-                setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                appendErrorMessage(ERR_ADD_BACKEND_READONLY.get(
-                                        String.valueOf(entryDN)));
-                break addProcessing;
-              }
-              break;
-          }
-        }
-
-
         try
         {
+          LocalBackendWorkflowElement.checkIfBackendIsWritable(backend, this,
+              entryDN, ERR_ADD_SERVER_READONLY, ERR_ADD_BACKEND_READONLY);
+
           if (noOp)
           {
             appendErrorMessage(INFO_ADD_NOOP.get());

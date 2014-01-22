@@ -299,48 +299,6 @@ deleteProcessing:
         }
 
 
-        // If it is not a private backend, then check to see if the server or
-        // backend is operating in read-only mode.
-        if (! backend.isPrivateBackend())
-        {
-          switch (DirectoryServer.getWritabilityMode())
-          {
-            case DISABLED:
-              setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-              appendErrorMessage(ERR_DELETE_SERVER_READONLY.get(
-                                      String.valueOf(entryDN)));
-              break deleteProcessing;
-
-            case INTERNAL_ONLY:
-              if (! (isInternalOperation() || isSynchronizationOperation()))
-              {
-                setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                appendErrorMessage(ERR_DELETE_SERVER_READONLY.get(
-                                        String.valueOf(entryDN)));
-                break deleteProcessing;
-              }
-          }
-
-          switch (backend.getWritabilityMode())
-          {
-            case DISABLED:
-              setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-              appendErrorMessage(ERR_DELETE_BACKEND_READONLY.get(
-                                      String.valueOf(entryDN)));
-              break deleteProcessing;
-
-            case INTERNAL_ONLY:
-              if (! (isInternalOperation() || isSynchronizationOperation()))
-              {
-                setResultCode(ResultCode.UNWILLING_TO_PERFORM);
-                appendErrorMessage(ERR_DELETE_BACKEND_READONLY.get(
-                                        String.valueOf(entryDN)));
-                break deleteProcessing;
-              }
-          }
-        }
-
-
         // The selected backend will have the responsibility of making sure that
         // the entry actually exists and does not have any children (or possibly
         // handling a subtree delete).  But we will need to check if there are
@@ -367,6 +325,9 @@ deleteProcessing:
         // Actually perform the delete.
         try
         {
+          LocalBackendWorkflowElement.checkIfBackendIsWritable(backend, this,
+            entryDN, ERR_DELETE_SERVER_READONLY, ERR_DELETE_BACKEND_READONLY);
+
           if (noOp)
           {
             setResultCode(ResultCode.NO_OPERATION);
