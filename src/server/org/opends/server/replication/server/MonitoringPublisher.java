@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2009-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
 
@@ -47,8 +47,6 @@ import org.opends.server.replication.protocol.MonitorMsg;
 public class MonitoringPublisher extends DirectoryThread
 {
 
-  private volatile boolean shutdown = false;
-
   /**
    * The tracer object for the debug logger.
    */
@@ -59,9 +57,6 @@ public class MonitoringPublisher extends DirectoryThread
 
   // Sleep time (in ms) before sending new monitoring messages.
   private volatile long period;
-
-  // Is the thread terminated ?
-  private volatile boolean done = false;
 
   private final Object shutdownLock = new Object();
 
@@ -97,16 +92,8 @@ public class MonitoringPublisher extends DirectoryThread
 
     try
     {
-      while (!shutdown)
+      while (!isShutdownInitiated())
       {
-        synchronized (shutdownLock)
-        {
-          if (!shutdown)
-          {
-            shutdownLock.wait(period);
-          }
-        }
-
         // Send global topology information to peer DSs
         MonitorData monitorData = replicationServerDomain
             .computeDomainMonitorData();
@@ -119,6 +106,12 @@ public class MonitoringPublisher extends DirectoryThread
         for (ServerHandler serverHandler : replicationServerDomain
             .getConnectedDSs().values())
         {
+          // send() can be long operation, check for shutdown between each calls
+          if (isShutdownInitiated())
+          {
+            break;
+          }
+
           // Set the right sender and destination ids
           monitorMsg.setSenderID(localServerId);
           monitorMsg.setDestination(serverHandler.getServerId());
@@ -129,6 +122,15 @@ public class MonitoringPublisher extends DirectoryThread
           catch (IOException e)
           {
             // Server is disconnecting ? Forget it
+          }
+        }
+
+        synchronized (shutdownLock)
+        {
+          // double check to ensure the call to notify() was not missed
+          if (!isShutdownInitiated())
+          {
+            shutdownLock.wait(period);
           }
         }
       }
@@ -144,7 +146,6 @@ public class MonitoringPublisher extends DirectoryThread
 
     }
 
-    done = true;
     TRACER.debugInfo("Monitoring publisher for dn "
         + replicationServerDomain.getBaseDn()
         + " is terminated."
@@ -160,17 +161,16 @@ public class MonitoringPublisher extends DirectoryThread
    */
   public void shutdown()
   {
+    initiateShutdown();
     synchronized (shutdownLock)
     {
-      shutdown = true;
       shutdownLock.notifyAll();
-
-      if (debugEnabled())
-      {
-        TRACER.debugInfo("Shutting down monitoring publisher for dn " +
-          replicationServerDomain.getBaseDn() + " in RS " +
-          replicationServerDomain.getReplicationServer().getServerId());
-      }
+    }
+    if (debugEnabled())
+    {
+      TRACER.debugInfo("Shutting down monitoring publisher for dn " +
+        replicationServerDomain.getBaseDn() + " in RS " +
+        replicationServerDomain.getReplicationServer().getServerId());
     }
   }
 
@@ -182,21 +182,10 @@ public class MonitoringPublisher extends DirectoryThread
   {
     try
     {
-      int FACTOR = 40; // Wait for 2 seconds before interrupting the thread
-      int n = 0;
-      while ((!done) && (this.isAlive()))
-      {
-        Thread.sleep(50);
-        n++;
-        if (n >= FACTOR)
-        {
-          TRACER.debugInfo("Interrupting monitoring publisher for dn " +
-            replicationServerDomain.getBaseDn() + " in RS " +
-            replicationServerDomain.getReplicationServer().getServerId());
-          this.interrupt();
-        }
-      }
-    } catch (InterruptedException e)
+      // Here, "this" is the monitoring publisher thread
+      this.join(2000);
+    }
+    catch (InterruptedException e)
     {
       // exit the loop if this thread is interrupted.
     }
