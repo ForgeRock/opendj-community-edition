@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.service;
 
@@ -918,9 +918,8 @@ public class ReplicationBroker
        * out which one is the best to connect to.
        */
       if (debugEnabled())
-        TRACER.debugInfo("serverId: " + serverId
-          + " phase 1 : will perform PhaseOneH with each RS in "
-          + " order to elect the preferred one");
+        debugInfo("phase 1 : will perform PhaseOneH with each RS in order to "
+            + "elect the preferred one");
 
       // Get info from every available replication servers
       replicationServerInfos = collectReplicationServersInfo();
@@ -930,14 +929,14 @@ public class ReplicationBroker
       if (replicationServerInfos.size() > 0)
       {
         // At least one server answered, find the best one.
-        electedRsInfo = computeBestReplicationServer(true, -1, state,
+        RSEvaluations evals = computeBestReplicationServer(true, -1, state,
           replicationServerInfos, serverId, groupId, getGenerationID());
+        electedRsInfo = evals.getBestRS();
 
         // Best found, now initialize connection to this one (handshake phase 1)
         if (debugEnabled())
-          TRACER.debugInfo("serverId: " + serverId
-            + " phase 2 : will perform PhaseOneH with the preferred RS="
-            + electedRsInfo);
+          debugInfo("phase 2 : will perform PhaseOneH with the preferred RS="
+              + electedRsInfo);
         electedRsInfo = performPhaseOneHandshake(
           electedRsInfo.getServerURL(), true, false);
 
@@ -1167,9 +1166,7 @@ public class ReplicationBroker
 
         if (debugEnabled())
         {
-          TRACER.debugInfo("RB for dn " + baseDn
-            + " and with server id " + Integer.toString(serverId)
-            + " computed " + Integer.toString(nChanges) + " changes late.");
+          debugInfo("computed " + nChanges + " changes late.");
         }
 
         /*
@@ -1275,9 +1272,8 @@ public class ReplicationBroker
       ReplicationMsg msg = localSession.receive();
       if (debugEnabled())
       {
-        TRACER.debugInfo("In RB for " + baseDn + "\nRB HANDSHAKE SENT:\n"
-          + serverStartMsg.toString() + "\nAND RECEIVED:\n"
-          + msg.toString());
+        debugInfo("RB HANDSHAKE SENT:\n" + serverStartMsg + "\nAND RECEIVED:\n"
+            + msg);
       }
 
       // Wrap received message in a server info object
@@ -1412,8 +1408,7 @@ public class ReplicationBroker
        */
       if (debugEnabled())
       {
-        TRACER.debugInfo("In RB for " + baseDn
-          + "\nRB HANDSHAKE SENT:\n" + startECLSessionMsg.toString());
+        debugInfo("RB HANDSHAKE SENT:\n" + startECLSessionMsg.toString());
       }
 
       // Alright set the timeout to the desired value
@@ -1484,9 +1479,8 @@ public class ReplicationBroker
 
       if (debugEnabled())
       {
-        TRACER.debugInfo("In RB for " + baseDn
-          + "\nRB HANDSHAKE SENT:\n" + startSessionMsg.toString()
-          + "\nAND RECEIVED:\n" + topologyMsg.toString());
+        debugInfo("RB HANDSHAKE SENT:\n" + startSessionMsg
+          + "\nAND RECEIVED:\n" + topologyMsg);
       }
 
       // Alright set the timeout to the desired value
@@ -1507,12 +1501,209 @@ public class ReplicationBroker
   }
 
   /**
+   * Class holding evaluation results for electing the best replication server
+   * for the local directory server.
+   */
+  static class RSEvaluations
+  {
+
+    private final int localServerId;
+    private Map<Integer, ReplicationServerInfo> bestRSs;
+    private final Map<Integer, Message> rsEvals =
+        new HashMap<Integer, Message>();
+
+    /**
+     * Ctor.
+     *
+     * @param localServerId
+     *          the serverId for the local directory server
+     * @param rsInfos
+     *          a Map of serverId => {@link ReplicationServerInfo} with all the
+     *          candidate replication servers
+     */
+    RSEvaluations(int localServerId,
+        Map<Integer, ReplicationServerInfo> rsInfos)
+    {
+      this.localServerId = localServerId;
+      this.bestRSs = rsInfos;
+    }
+
+    private boolean keepBest(LocalEvaluation eval)
+    {
+      if (eval.hasAcceptedAny())
+      {
+        bestRSs = eval.getAccepted();
+        rsEvals.putAll(eval.getRejected());
+        return true;
+      }
+      return false;
+    }
+
+    /**
+     * Sets the elected best replication server, rejecting all the other
+     * replication servers with the supplied evaluation.
+     *
+     * @param bestRsId
+     *          the serverId of the elected replication server
+     * @param rejectedRSsEval
+     *          the evaluation for all the rejected replication servers
+     */
+    private void setBestRS(int bestRsId, Message rejectedRSsEval)
+    {
+      for (Iterator<Entry<Integer, ReplicationServerInfo>> it =
+          this.bestRSs.entrySet().iterator(); it.hasNext();)
+      {
+        final Entry<Integer, ReplicationServerInfo> entry = it.next();
+        final Integer rsId = entry.getKey();
+        final ReplicationServerInfo rsInfo = entry.getValue();
+        if (rsInfo.getServerId() != bestRsId)
+        {
+          it.remove();
+        }
+        rsEvals.put(rsId, rejectedRSsEval);
+      }
+    }
+
+    private void discardAll(Message eval)
+    {
+      for (Integer rsId : bestRSs.keySet())
+      {
+        rsEvals.put(rsId, eval);
+      }
+    }
+
+    private boolean foundBestRS()
+    {
+      return bestRSs.size() == 1;
+    }
+
+    /**
+     * Returns the {@link ReplicationServerInfo} for the best replication
+     * server.
+     *
+     * @return the {@link ReplicationServerInfo} for the best replication server
+     */
+    ReplicationServerInfo getBestRS()
+    {
+      if (foundBestRS())
+      {
+        return bestRSs.values().iterator().next();
+      }
+      return null;
+    }
+
+    /**
+     * Returns the evaluations for all the candidate replication servers.
+     *
+     * @return a Map of serverId => Message containing the evaluation for each
+     *         candidate replication servers.
+     */
+    Map<Integer, Message> getEvaluations()
+    {
+      if (foundBestRS())
+      {
+        final Integer bestRSServerId = getBestRS().getServerId();
+        if (rsEvals.get(bestRSServerId) == null)
+        {
+          final Message eval = NOTE_BEST_RS.get(bestRSServerId, localServerId);
+          rsEvals.put(bestRSServerId, eval);
+        }
+      }
+      return Collections.unmodifiableMap(rsEvals);
+    }
+
+    /**
+     * Returns the evaluation for the supplied replication server Id.
+     * <p>
+     * Note: "unknown RS" message is returned if the supplied replication server
+     * was not part of the candidate replication servers.
+     *
+     * @param rsServerId
+     *          the supplied replication server Id
+     * @return the evaluation {@link Message} for the supplied replication
+     *         server Id
+     */
+    private Message getEvaluation(int rsServerId)
+    {
+      final Message evaluation = getEvaluations().get(rsServerId);
+      if (evaluation != null)
+      {
+        return evaluation;
+      }
+      return NOTE_UNKNOWN_RS.get(rsServerId, localServerId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String toString()
+    {
+      return new StringBuilder()
+          .append("Current best replication server Ids: ").append(
+              this.bestRSs.keySet()).append(
+              ", Evaluation of connected replication servers").append(
+              " (ServerId => Evaluation): ").append(this.rsEvals.keySet())
+          .append(", Any replication server not appearing here").append(
+              " could not be contacted.").toString();
+    }
+  }
+
+  /**
+   * Evaluation local to one filter.
+   */
+  private static class LocalEvaluation
+  {
+    private final Map<Integer, ReplicationServerInfo> accepted =
+        new HashMap<Integer, ReplicationServerInfo>();
+    private final Map<ReplicationServerInfo, Message> rsEvals =
+        new HashMap<ReplicationServerInfo, Message>();
+
+    private void accept(Integer rsId, ReplicationServerInfo rsInfo)
+    {
+      // forget previous eval, including undoing reject
+      this.rsEvals.remove(rsInfo);
+      this.accepted.put(rsId, rsInfo);
+    }
+
+    private void reject(ReplicationServerInfo rsInfo, Message reason)
+    {
+      this.accepted.remove(rsInfo.getServerId()); // undo accept
+      this.rsEvals.put(rsInfo, reason);
+    }
+
+    private Map<Integer, ReplicationServerInfo> getAccepted()
+    {
+      return accepted;
+    }
+
+    private ReplicationServerInfo[] getAcceptedRSInfos()
+    {
+      return accepted.values().toArray(
+          new ReplicationServerInfo[accepted.size()]);
+    }
+
+    public Map<Integer, Message> getRejected()
+    {
+      final Map<Integer, Message> result = new HashMap<Integer, Message>();
+      for (Entry<ReplicationServerInfo, Message> entry : rsEvals.entrySet())
+      {
+        result.put(entry.getKey().getServerId(), entry.getValue());
+      }
+      return result;
+    }
+
+    private boolean hasAcceptedAny()
+    {
+      return !accepted.isEmpty();
+    }
+
+  }
+
+  /**
    * Returns the replication server that best fits our need so that we can
    * connect to it or determine if we must disconnect from current one to
    * re-connect to best server.
-   *
+   * <p>
    * Note: this method is static for test purpose (access from unit tests)
-   *
    *
    * @param firstConnection True if we run this method for the very first
    * connection of the broker. False if we run this method to determine if the
@@ -1530,16 +1721,16 @@ public class ReplicationBroker
    * disconnect (so the best replication server is another one than the current
    * one). Null can only be returned when firstConnection is false.
    */
-  public static ReplicationServerInfo computeBestReplicationServer(
+  public static RSEvaluations computeBestReplicationServer(
       boolean firstConnection, int rsServerId, ServerState myState,
       Map<Integer, ReplicationServerInfo> rsInfos, int localServerId,
       byte groupId, long generationId)
   {
-
+    final RSEvaluations evals = new RSEvaluations(localServerId, rsInfos);
     // Shortcut, if only one server, this is the best
-    if (rsInfos.size() == 1)
+    if (evals.foundBestRS())
     {
-      return rsInfos.values().iterator().next();
+      return evals;
     }
 
     /**
@@ -1552,7 +1743,6 @@ public class ReplicationBroker
      *   local DS
      * - replication server in the same VM as local DS one
      */
-    Map<Integer, ReplicationServerInfo> bestServers = rsInfos;
     /*
     The list of best replication servers is filtered with each criteria. At
     each criteria, the list is replaced with the filtered one if there
@@ -1563,116 +1753,96 @@ public class ReplicationBroker
     the local configuration. When the current method is called, for
     sure, at least one server from the list is locally configured
     */
-    bestServers =
-        keepBest(filterServersLocallyConfigured(bestServers), bestServers);
+    filterServersLocallyConfigured(evals, localServerId);
     // Some servers with same group id ?
-    bestServers =
-        keepBest(filterServersWithSameGroupId(bestServers, groupId),
-            bestServers);
+    filterServersWithSameGroupId(evals, localServerId, groupId);
     // Some servers with same generation id ?
-    Map<Integer, ReplicationServerInfo> sameGenerationId =
-        filterServersWithSameGenerationId(bestServers, generationId);
-    if (sameGenerationId.size() > 0)
+    final boolean rssWithSameGenerationIdExist =
+        filterServersWithSameGenerationId(evals, localServerId, generationId);
+    if (rssWithSameGenerationIdExist)
     {
       // If some servers with the right generation id this is useful to
       // run the local DS change criteria
-      bestServers =
-          keepBest(filterServersWithAllLocalDSChanges(sameGenerationId,
-              myState, localServerId), sameGenerationId);
+      filterServersWithAllLocalDSChanges(evals, myState, localServerId);
     }
     // Some servers in the local VM or local host?
-    bestServers = keepBest(filterServersOnSameHost(bestServers), bestServers);
+    filterServersOnSameHost(evals, localServerId);
+
+    if (evals.foundBestRS())
+    {
+      return evals;
+    }
 
     /**
-     * Now apply the choice base on the weight to the best servers list
+     * Now apply the choice based on the weight to the best servers list
      */
-    if (bestServers.size() > 1)
+    if (firstConnection)
     {
-      if (firstConnection)
-      {
-        // We are not connected to a server yet
-        return computeBestServerForWeight(bestServers, -1, -1);
-      } else
-      {
-        /*
-        We are already connected to a RS: compute the best RS as far as the
-        weights is concerned. If this is another one, some DS must
-        disconnect.
-        */
-        return computeBestServerForWeight(bestServers, rsServerId,
-          localServerId);
-      }
-    } else
-    {
-      return bestServers.values().iterator().next();
+      // We are not connected to a server yet
+      computeBestServerForWeight(evals, -1, -1);
     }
-  }
-
-  /**
-   * If the filtered Map is not empty then it is returned, else return the
-   * original unfiltered Map.
-   *
-   * @return the best fit Map between the filtered Map and the original
-   * unfiltered Map.
-   */
-  private static <K, V> Map<K, V> keepBest(Map<K, V> filteredMap,
-      Map<K, V> unfilteredMap)
-  {
-    if (!filteredMap.isEmpty())
+    else
     {
-      return filteredMap;
+      /*
+       * We are already connected to a RS: compute the best RS as far as the
+       * weights is concerned. If this is another one, some DS must disconnect.
+       */
+      computeBestServerForWeight(evals, rsServerId, localServerId);
     }
-    return unfilteredMap;
+    return evals;
   }
 
   /**
    * Creates a new list that contains only replication servers that are locally
    * configured.
-   * @param bestServers The list of replication servers to filter
-   * @return The sub list of replication servers locally configured
+   * @param evals The evaluation object
    */
-  private static Map<Integer, ReplicationServerInfo>
-    filterServersLocallyConfigured(Map<Integer,
-    ReplicationServerInfo> bestServers)
+  private static void filterServersLocallyConfigured(RSEvaluations evals,
+      int localServerId)
   {
-    Map<Integer, ReplicationServerInfo> result =
-      new HashMap<Integer, ReplicationServerInfo>();
-
-    for (Integer rsId : bestServers.keySet())
+    final LocalEvaluation eval = new LocalEvaluation();
+    for (Entry<Integer, ReplicationServerInfo> entry : evals.bestRSs.entrySet())
     {
-      ReplicationServerInfo replicationServerInfo = bestServers.get(rsId);
-      if (replicationServerInfo.isLocallyConfigured())
+      final Integer rsId = entry.getKey();
+      final ReplicationServerInfo rsInfo = entry.getValue();
+      if (rsInfo.isLocallyConfigured())
       {
-        result.put(rsId, replicationServerInfo);
+        eval.accept(rsId, rsInfo);
+      }
+      else
+      {
+        eval.reject(rsInfo,
+            NOTE_RS_NOT_LOCALLY_CONFIGURED.get(rsId, localServerId));
       }
     }
-    return result;
+    evals.keepBest(eval);
   }
 
   /**
    * Creates a new list that contains only replication servers that have the
    * passed group id, from a passed replication server list.
-   * @param bestServers The list of replication servers to filter
+   * @param evals The evaluation object
    * @param groupId The group id that must match
-   * @return The sub list of replication servers matching the requested group id
-   * (which may be empty)
    */
-  private static Map<Integer, ReplicationServerInfo>
-    filterServersWithSameGroupId(Map<Integer,
-    ReplicationServerInfo> bestServers, byte groupId)
+  private static void filterServersWithSameGroupId(RSEvaluations evals,
+      int localServerId, byte groupId)
   {
-    Map<Integer, ReplicationServerInfo> result =
-      new HashMap<Integer, ReplicationServerInfo>();
-
-    for (Integer rsId : bestServers.keySet())
+    final LocalEvaluation eval = new LocalEvaluation();
+    for (Entry<Integer, ReplicationServerInfo> entry : evals.bestRSs.entrySet())
     {
-      ReplicationServerInfo replicationServerInfo = bestServers.get(rsId);
-      if (replicationServerInfo.getGroupId() == groupId)
+      final Integer rsId = entry.getKey();
+      final ReplicationServerInfo rsInfo = entry.getValue();
+      if (rsInfo.getGroupId() == groupId)
       {
-        result.put(rsId, replicationServerInfo);
+        eval.accept(rsId, rsInfo);
+      }
+      else
+      {
+        eval.reject(rsInfo, NOTE_RS_HAS_DIFFERENT_GROUP_ID_THAN_DS.get(
+            rsId, rsInfo.getGroupId(), localServerId, groupId));
       }
     }
-    return result;
+    evals.keepBest(eval);
   }
 
   /**
@@ -1682,27 +1852,36 @@ public class ReplicationBroker
    * then the 'empty'(generationId==-1) replication servers are also included
    * in the result list.
    *
-   * @param bestServers  The list of replication servers to filter
+   * @param evals The evaluation object
    * @param generationId The generation id that must match
-   * @return The sub list of replication servers matching the requested
-   * generation id (which may be empty)
+   * @return whether some replication server passed the filter
    */
-  private static Map<Integer, ReplicationServerInfo>
-    filterServersWithSameGenerationId(Map<Integer,
-    ReplicationServerInfo> bestServers, long generationId)
+  private static boolean filterServersWithSameGenerationId(
+      RSEvaluations evals, long localServerId, long generationId)
   {
-    Map<Integer, ReplicationServerInfo> result =
-      new HashMap<Integer, ReplicationServerInfo>();
+    final Map<Integer, ReplicationServerInfo> bestServers = evals.bestRSs;
+    final LocalEvaluation eval = new LocalEvaluation();
     boolean emptyState = true;
 
-    for (Integer rsId : bestServers.keySet())
+    for (Entry<Integer, ReplicationServerInfo> entry : bestServers.entrySet())
     {
-      ReplicationServerInfo replicationServerInfo = bestServers.get(rsId);
-      if (replicationServerInfo.getGenerationId() == generationId)
+      final Integer rsId = entry.getKey();
+      final ReplicationServerInfo rsInfo = entry.getValue();
+      if (rsInfo.getGenerationId() == generationId)
       {
-        result.put(rsId, replicationServerInfo);
-        if (!replicationServerInfo.serverState.isEmpty())
+        eval.accept(rsId, rsInfo);
+        if (!rsInfo.serverState.isEmpty())
           emptyState = false;
+      }
+      else if (rsInfo.getGenerationId() == -1)
+      {
+        eval.reject(rsInfo, NOTE_RS_HAS_NO_GENERATION_ID.get(rsId,
+            generationId, localServerId));
+      }
+      else
+      {
+        eval.reject(rsInfo, NOTE_RS_HAS_DIFFERENT_GENERATION_ID_THAN_DS.get(
+            rsId, rsInfo.getGenerationId(), localServerId, generationId));
       }
     }
 
@@ -1710,108 +1889,133 @@ public class ReplicationBroker
     {
       // If the RS with a generationId have all an empty state,
       // then the 'empty'(genId=-1) RSes are also candidate
-      for (Integer rsId : bestServers.keySet())
+      for (Entry<Integer, ReplicationServerInfo> entry : bestServers.entrySet())
       {
-        ReplicationServerInfo replicationServerInfo = bestServers.get(rsId);
-        if (replicationServerInfo.getGenerationId() == -1)
+        ReplicationServerInfo rsInfo = entry.getValue();
+        if (rsInfo.getGenerationId() == -1)
         {
-          result.put(rsId, replicationServerInfo);
+          // will undo the reject of previously rejected RSs
+          eval.accept(entry.getKey(), rsInfo);
         }
       }
     }
-    return result;
+
+    return evals.keepBest(eval);
   }
 
   /**
    * Creates a new list that contains only replication servers that have the
    * latest changes from the passed DS, from a passed replication server list.
-   * @param bestServers The list of replication servers to filter
+   * @param evals The evaluation object
    * @param localState The state of the local DS
    * @param localServerId The server id to consider for the changes
-   * @return The sub list of replication servers that have the latest changes
-   * from the passed DS (which may be empty)
    */
-  private static Map<Integer, ReplicationServerInfo>
-    filterServersWithAllLocalDSChanges(Map<Integer,
-    ReplicationServerInfo> bestServers, ServerState localState,
-    int localServerId)
+  private static void filterServersWithAllLocalDSChanges(
+      RSEvaluations evals, ServerState localState, int localServerId)
   {
-    Map<Integer, ReplicationServerInfo> upToDateServers =
-      new HashMap<Integer, ReplicationServerInfo>();
-    Map<Integer, ReplicationServerInfo> moreUpToDateServers =
-      new HashMap<Integer, ReplicationServerInfo>();
-
     // Extract the change number of the latest change generated by the local
     // server
-    ChangeNumber myChangeNumber = localState.getMaxChangeNumber(localServerId);
-    if (myChangeNumber == null)
-    {
-      myChangeNumber = new ChangeNumber(0, 0, localServerId);
-    }
+    final ChangeNumber localCN = getMaxChangeNumber(localState, localServerId);
 
     /**
-     * Find replication servers who are up to date (or more up to date than us,
+     * Find replication servers that are up to date (or more up to date than us,
      * if for instance we failed and restarted, having sent some changes to the
      * RS but without having time to store our own state) regarding our own
-     * server id. If some servers more up to date, prefer this list but take
+     * server id. If some servers are more up to date, prefer this list but take
      * only the latest change number.
      */
-    ChangeNumber latestRsChangeNumber = null;
-    for (Integer rsId : bestServers.keySet())
+    final LocalEvaluation mostUpToDateEval = new LocalEvaluation();
+    boolean foundRSMoreUpToDateThanLocalDS = false;
+    ChangeNumber latestRsCN = null;
+    for (Entry<Integer, ReplicationServerInfo> entry : evals.bestRSs.entrySet())
     {
-      ReplicationServerInfo replicationServerInfo = bestServers.get(rsId);
-      ServerState rsState = replicationServerInfo.getServerState();
-      ChangeNumber rsChangeNumber = rsState.getMaxChangeNumber(localServerId);
-      if (rsChangeNumber == null)
-      {
-        rsChangeNumber = new ChangeNumber(0, 0, localServerId);
-      }
+      final Integer rsId = entry.getKey();
+      final ReplicationServerInfo rsInfo = entry.getValue();
+      final ChangeNumber rsCN = getMaxChangeNumber(
+          rsInfo.getServerState(), localServerId);
 
       // Has this replication server the latest local change ?
-      if (myChangeNumber.olderOrEqual(rsChangeNumber))
+      if (rsCN.older(localCN))
       {
-        if (myChangeNumber.equals(rsChangeNumber))
+        mostUpToDateEval.reject(rsInfo, NOTE_RS_LATER_THAN_LOCAL_DS.get(
+            rsId, rsCN.toStringUI(), localServerId, localCN.toStringUI()));
+      }
+      else if (rsCN.equals(localCN))
+      {
+        // This replication server has exactly the latest change from the
+        // local server
+        if (!foundRSMoreUpToDateThanLocalDS)
         {
-          // This replication server has exactly the latest change from the
-          // local server
-          upToDateServers.put(rsId, replicationServerInfo);
-        } else
+          mostUpToDateEval.accept(rsId, rsInfo);
+        }
+        else
         {
-          // This replication server is even more up to date than the local
-          // server
-          if (latestRsChangeNumber == null)
-          {
-            // Initialize the latest change number
-            latestRsChangeNumber = rsChangeNumber;
-          }
-          if (rsChangeNumber.newerOrEquals(latestRsChangeNumber))
-          {
-            if (rsChangeNumber.equals(latestRsChangeNumber))
-            {
-              moreUpToDateServers.put(rsId, replicationServerInfo);
-            } else
-            {
-              // This RS is even more up to date, clear the list and store this
-              // new RS
-              moreUpToDateServers.clear();
-              moreUpToDateServers.put(rsId, replicationServerInfo);
-              latestRsChangeNumber = rsChangeNumber;
-            }
-          }
+          mostUpToDateEval.reject(rsInfo,
+            NOTE_RS_LATER_THAN_ANOTHER_RS_MORE_UP_TO_DATE_THAN_LOCAL_DS.get(
+              rsId, rsCN.toStringUI(), localServerId, localCN.toStringUI()));
+        }
+      }
+      else if (rsCN.newer(localCN))
+      {
+        // This replication server is even more up to date than the local server
+        if (latestRsCN == null)
+        {
+          foundRSMoreUpToDateThanLocalDS = true;
+          // all previous results are now outdated, reject them all
+          rejectAllWithRSIsLaterThanBestRS(mostUpToDateEval, localServerId,
+              localCN);
+          // Initialize the latest Change Number
+          latestRsCN = rsCN;
+        }
+
+        if (rsCN.equals(latestRsCN))
+        {
+          mostUpToDateEval.accept(rsId, rsInfo);
+        }
+        else if (rsCN.newer(latestRsCN))
+        {
+          // This RS is even more up to date, reject all previously accepted RSs
+          // and store this new RS
+          rejectAllWithRSIsLaterThanBestRS(mostUpToDateEval, localServerId,
+              localCN);
+          mostUpToDateEval.accept(rsId, rsInfo);
+          latestRsCN = rsCN;
+        }
+        else
+        {
+          mostUpToDateEval.reject(rsInfo,
+            NOTE_RS_LATER_THAN_ANOTHER_RS_MORE_UP_TO_DATE_THAN_LOCAL_DS.get(
+              rsId, rsCN.toStringUI(), localServerId, localCN.toStringUI()));
         }
       }
     }
-    if (moreUpToDateServers.size() > 0)
-    {
-      // Prefer servers more up to date than local server
-      return moreUpToDateServers;
-    } else
-    {
-      return upToDateServers;
-    }
+    evals.keepBest(mostUpToDateEval);
   }
 
+  private static ChangeNumber getMaxChangeNumber(ServerState state,
+      int serverId)
+  {
+    final ChangeNumber cn = state.getMaxChangeNumber(serverId);
+    if (cn != null)
+    {
+      return cn;
+    }
+    return new ChangeNumber(0, 0, serverId);
+  }
 
+  private static void rejectAllWithRSIsLaterThanBestRS(
+      final LocalEvaluation eval, int localServerId, ChangeNumber localCN)
+  {
+    for (ReplicationServerInfo rsInfo : eval.getAcceptedRSInfos())
+    {
+      final String rsCN = getMaxChangeNumber(
+          rsInfo.getServerState(), localServerId).toStringUI();
+      final Message reason =
+          NOTE_RS_LATER_THAN_ANOTHER_RS_MORE_UP_TO_DATE_THAN_LOCAL_DS.get(
+            rsInfo.getServerId(), rsCN, localServerId, localCN.toStringUI());
+      eval.reject(rsInfo, reason);
+    }
+  }
 
   /**
    * Creates a new list that contains only replication servers that are on the
@@ -1819,25 +2023,22 @@ public class ReplicationBroker
    * method will gives priority to any replication server which is in the same
    * VM as this DS.
    *
-   * @param bestServers
-   *          The list of replication servers to filter
-   * @return The sub list of replication servers being on the same host as the
-   *         local DS (which may be empty)
+   * @param evals The evaluation object
    */
-  private static Map<Integer, ReplicationServerInfo> filterServersOnSameHost(
-      Map<Integer, ReplicationServerInfo> bestServers)
+  private static void filterServersOnSameHost(RSEvaluations evals,
+      int localServerId)
   {
     /*
      * Initially look for all servers on the same host. If we find one in the
      * same VM, then narrow the search.
      */
-    boolean filterServersInSameVM = false;
-    Map<Integer, ReplicationServerInfo> result =
-        new HashMap<Integer, ReplicationServerInfo>();
-    for (Integer rsId : bestServers.keySet())
+    boolean foundRSInSameVM = false;
+    final LocalEvaluation eval = new LocalEvaluation();
+    for (Entry<Integer, ReplicationServerInfo> entry : evals.bestRSs.entrySet())
     {
-      ReplicationServerInfo replicationServerInfo = bestServers.get(rsId);
-      String server = replicationServerInfo.getServerURL();
+      final Integer rsId = entry.getKey();
+      final ReplicationServerInfo rsInfo = entry.getValue();
+      String server = rsInfo.getServerURL();
       int separator = server.lastIndexOf(':');
       if (separator > 0)
       {
@@ -1847,27 +2048,50 @@ public class ReplicationBroker
           int port = Integer.parseInt(server.substring(separator + 1));
           if (isLocalReplicationServerPort(port))
           {
-            // An RS in the same VM will always have priority.
-            if (!filterServersInSameVM)
+            if (!foundRSInSameVM)
             {
+              // An RS in the same VM will always have priority.
               // Narrow the search to only include servers in this VM.
-              result.clear();
-              filterServersInSameVM = true;
+              rejectAllWithRSOnDifferentVMThanDS(eval, localServerId);
+              foundRSInSameVM = true;
             }
-            result.put(rsId, replicationServerInfo);
+            eval.accept(rsId, rsInfo);
           }
-          else if (!filterServersInSameVM)
+          else if (!foundRSInSameVM)
           {
-            result.put(rsId, replicationServerInfo);
+            // OK, accept RSs on the same machine because we have not found an
+            // RS in the same VM yet
+            eval.accept(rsId, rsInfo);
           }
           else
           {
             // Skip: we have found some RSs in the same VM, but this RS is not.
+            eval.reject(rsInfo, NOTE_RS_ON_DIFFERENT_VM_THAN_DS.get(rsId,
+                localServerId));
           }
         }
+        else
+        {
+          eval.reject(rsInfo, NOTE_RS_ON_DIFFERENT_HOST_THAN_DS.get(rsId,
+              localServerId));
+        }
+      }
+      else
+      {
+        eval.reject(rsInfo, NOTE_RS_URL_HAS_NO_PORT_NUMBER.get(rsId, server));
       }
     }
-    return result;
+    evals.keepBest(eval);
+  }
+
+  private static void rejectAllWithRSOnDifferentVMThanDS(LocalEvaluation eval,
+      int localServerId)
+  {
+    for (ReplicationServerInfo rsInfo : eval.getAcceptedRSInfos())
+    {
+      eval.reject(rsInfo, NOTE_RS_ON_DIFFERENT_VM_THAN_DS.get(
+          rsInfo.getServerId(), localServerId));
+    }
   }
 
   /**
@@ -1877,23 +2101,18 @@ public class ReplicationBroker
    * Warning: This method is expected to be called with at least 2 servers in
    * bestServers
    * Note: this method is static for test purpose (access from unit tests)
-   * @param bestServers The list of replication servers to consider
+   * @param evals The evaluation object
    * @param currentRsServerId The replication server the local server is
    *        currently connected to. -1 if the local server is not yet connected
    *        to any replication server.
    * @param localServerId The server id of the local server. This is not used
    *        when it is not connected to a replication server
    *        (currentRsServerId = -1)
-   * @return The replication server the local server should be connected to
-   * as far as the weight is concerned. This may be the currently used one if
-   * the weight is correctly spread. If the returned value is null, the best
-   * replication server is undetermined but the local server must disconnect
-   * (so the best replication server is another one than the current one).
    */
-  public static ReplicationServerInfo computeBestServerForWeight(
-    Map<Integer, ReplicationServerInfo> bestServers, int currentRsServerId,
-    int localServerId)
+  public static void computeBestServerForWeight(RSEvaluations evals,
+    int currentRsServerId, int localServerId)
   {
+    final Map<Integer, ReplicationServerInfo> bestServers = evals.bestRSs;
     /*
      * - Compute the load goal of each RS, deducing it from the weights affected
      * to them.
@@ -1906,29 +2125,30 @@ public class ReplicationBroker
     int sumOfWeights = 0;
     // Sum of the connected DSs
     int sumOfConnectedDSs = 0;
-    for (ReplicationServerInfo replicationServerInfo : bestServers.values())
+    for (ReplicationServerInfo rsInfo : bestServers.values())
     {
-      sumOfWeights += replicationServerInfo.getWeight();
-      sumOfConnectedDSs += replicationServerInfo.getConnectedDSNumber();
+      sumOfWeights += rsInfo.getWeight();
+      sumOfConnectedDSs += rsInfo.getConnectedDSNumber();
     }
+
     // Distance (difference) of the current loads to the load goals of each RS:
     // key:server id, value: distance
     Map<Integer, BigDecimal> loadDistances = new HashMap<Integer, BigDecimal>();
     // Precision for the operations (number of digits after the dot)
-    MathContext mathContext = new MathContext(32, RoundingMode.HALF_UP);
-    for (Integer rsId : bestServers.keySet())
+    final MathContext mathContext = new MathContext(32, RoundingMode.HALF_UP);
+    for (Entry<Integer, ReplicationServerInfo> entry : bestServers.entrySet())
     {
-      ReplicationServerInfo replicationServerInfo = bestServers.get(rsId);
+      final Integer rsId = entry.getKey();
+      final ReplicationServerInfo rsInfo = entry.getValue();
 
-      int rsWeight = replicationServerInfo.getWeight();
       //  load goal = rs weight / sum of weights
-      BigDecimal loadGoalBd = BigDecimal.valueOf(rsWeight).divide(
+      BigDecimal loadGoalBd = BigDecimal.valueOf(rsInfo.getWeight()).divide(
           BigDecimal.valueOf(sumOfWeights), mathContext);
       BigDecimal currentLoadBd = BigDecimal.ZERO;
       if (sumOfConnectedDSs != 0)
       {
         // current load = number of connected DSs / total number of DSs
-        int connectedDSs = replicationServerInfo.getConnectedDSNumber();
+        int connectedDSs = rsInfo.getConnectedDSNumber();
         currentLoadBd = BigDecimal.valueOf(connectedDSs).divide(
             BigDecimal.valueOf(sumOfConnectedDSs), mathContext);
       }
@@ -1940,8 +2160,23 @@ public class ReplicationBroker
 
     if (currentRsServerId == -1)
     {
-      // The local server is not connected yet
+      // The local server is not connected yet, find best server to connect to,
+      // taking the weights into account.
+      computeBestServerWhenNotConnected(evals, loadDistances, localServerId);
+    }
+    else
+    {
+      // The local server is currently connected to a RS, let's see if it must
+      // disconnect or not, taking the weights into account.
+      computeBestServerWhenConnected(evals, loadDistances, localServerId,
+          currentRsServerId, sumOfWeights, sumOfConnectedDSs);
+    }
+  }
 
+  private static void computeBestServerWhenNotConnected(RSEvaluations evals,
+      Map<Integer, BigDecimal> loadDistances, int localServerId)
+  {
+    final Map<Integer, ReplicationServerInfo> bestServers = evals.bestRSs;
       /*
        * Find the server with the current highest distance to its load goal and
        * choose it. Make an exception if every server is correctly balanced,
@@ -1980,163 +2215,181 @@ public class ReplicationBroker
         // Choose server with the highest weight
         bestRsId = highestWeightRsId;
       }
-      return bestServers.get(bestRsId);
-    } else
-    {
-      // The local server is currently connected to a RS, let's see if it must
-      // disconnect or not, taking the weights into account.
+    evals.setBestRS(bestRsId, NOTE_BIGGEST_WEIGHT_RS.get(localServerId,
+        bestRsId));
+  }
 
-      float currentLoadDistance =
-        loadDistances.get(currentRsServerId).floatValue();
-      if (currentLoadDistance < 0)
+  private static void computeBestServerWhenConnected(RSEvaluations evals,
+      Map<Integer, BigDecimal> loadDistances, int localServerId,
+      int currentRsServerId, int sumOfWeights, int sumOfConnectedDSs)
+  {
+    final Map<Integer, ReplicationServerInfo> bestServers = evals.bestRSs;
+    final MathContext mathContext = new MathContext(32, RoundingMode.HALF_UP);
+    float currentLoadDistance =
+      loadDistances.get(currentRsServerId).floatValue();
+    if (currentLoadDistance < 0)
+    {
+      /*
+      Too much DSs connected to the current RS, compared with its load
+      goal:
+      Determine the potential number of DSs to disconnect from the current
+      RS and see if the local DS is part of them: the DSs that must
+      disconnect are those with the lowest server id.
+      Compute the sum of the distances of the load goals of the other RSs
+      */
+      BigDecimal sumOfLoadDistancesOfOtherRSsBd = BigDecimal.ZERO;
+      for (Integer rsId : bestServers.keySet())
+      {
+        if (rsId != currentRsServerId)
+        {
+          sumOfLoadDistancesOfOtherRSsBd = sumOfLoadDistancesOfOtherRSsBd.add(
+            loadDistances.get(rsId), mathContext);
+        }
+      }
+
+      if (sumOfLoadDistancesOfOtherRSsBd.floatValue() > 0)
       {
         /*
-        Too much DSs connected to the current RS, compared with its load
-        goal:
-        Determine the potential number of DSs to disconnect from the current
-        RS and see if the local DS is part of them: the DSs that must
-        disconnect are those with the lowest server id.
-        Compute the sum of the distances of the load goals of the other RSs
+        The average distance of the other RSs shows a lack of DSs.
+        Compute the number of DSs to disconnect from the current RS,
+        rounding to the nearest integer number. Do only this if there is
+        no risk of yoyo effect: when the exact balance cannot be
+        established due to the current number of DSs connected, do not
+        disconnect a DS. A simple example where the balance cannot be
+        reached is:
+        - RS1 has weight 1 and 2 DSs
+        - RS2 has weight 1 and 1 DS
+        => disconnecting a DS from RS1 to reconnect it to RS2 would have no
+        sense as this would lead to the reverse situation. In that case,
+        the perfect balance cannot be reached and we must stick to the
+        current situation, otherwise the DS would keep move between the 2
+        RSs
         */
-        BigDecimal sumOfLoadDistancesOfOtherRSsBd = BigDecimal.ZERO;
-        for (Integer rsId : bestServers.keySet())
+        float notRoundedOverloadingDSsNumber = sumOfLoadDistancesOfOtherRSsBd.
+          multiply(BigDecimal.valueOf(sumOfConnectedDSs), mathContext)
+              .floatValue();
+        int overloadingDSsNumber = Math.round(notRoundedOverloadingDSsNumber);
+
+        // Avoid yoyo effect
+        if (overloadingDSsNumber == 1)
         {
-          if (rsId != currentRsServerId)
+          // What would be the new load distance for the current RS if
+          // we disconnect some DSs ?
+          ReplicationServerInfo currentReplicationServerInfo =
+            bestServers.get(currentRsServerId);
+
+          int currentRsWeight = currentReplicationServerInfo.getWeight();
+          BigDecimal currentRsWeightBd = BigDecimal.valueOf(currentRsWeight);
+          BigDecimal sumOfWeightsBd = BigDecimal.valueOf(sumOfWeights);
+          BigDecimal currentRsLoadGoalBd =
+            currentRsWeightBd.divide(sumOfWeightsBd, mathContext);
+          BigDecimal potentialCurrentRsNewLoadBd = BigDecimal.ZERO;
+          if (sumOfConnectedDSs != 0)
           {
-            sumOfLoadDistancesOfOtherRSsBd = sumOfLoadDistancesOfOtherRSsBd.add(
-              loadDistances.get(rsId), mathContext);
+            int connectedDSs = currentReplicationServerInfo.
+              getConnectedDSNumber();
+            BigDecimal potentialNewConnectedDSsBd =
+                BigDecimal.valueOf(connectedDSs - 1);
+            BigDecimal sumOfConnectedDSsBd =
+                BigDecimal.valueOf(sumOfConnectedDSs);
+            potentialCurrentRsNewLoadBd =
+              potentialNewConnectedDSsBd.divide(sumOfConnectedDSsBd,
+                mathContext);
+          }
+          BigDecimal potentialCurrentRsNewLoadDistanceBd =
+            currentRsLoadGoalBd.subtract(potentialCurrentRsNewLoadBd,
+              mathContext);
+
+          // What would be the new load distance for the other RSs ?
+          BigDecimal additionalDsLoadBd =
+              BigDecimal.ONE.divide(
+                  BigDecimal.valueOf(sumOfConnectedDSs), mathContext);
+          BigDecimal potentialNewSumOfLoadDistancesOfOtherRSsBd =
+            sumOfLoadDistancesOfOtherRSsBd.subtract(additionalDsLoadBd,
+                  mathContext);
+
+          /*
+          Now compare both values: we must not disconnect the DS if this
+          is for going in a situation where the load distance of the other
+          RSs is the opposite of the future load distance of the local RS
+          or we would evaluate that we should disconnect just after being
+          arrived on the new RS. But we should disconnect if we reach the
+          perfect balance (both values are 0).
+          */
+          MathContext roundMc = new MathContext(6, RoundingMode.DOWN);
+          BigDecimal potentialCurrentRsNewLoadDistanceBdRounded =
+            potentialCurrentRsNewLoadDistanceBd.round(roundMc);
+          BigDecimal potentialNewSumOfLoadDistancesOfOtherRSsBdRounded =
+            potentialNewSumOfLoadDistancesOfOtherRSsBd.round(roundMc);
+
+          if ((potentialCurrentRsNewLoadDistanceBdRounded.compareTo(
+            BigDecimal.ZERO) != 0)
+            && (potentialCurrentRsNewLoadDistanceBdRounded.equals(
+            potentialNewSumOfLoadDistancesOfOtherRSsBdRounded.negate())))
+          {
+            // Avoid the yoyo effect, and keep the local DS connected to its
+            // current RS
+            evals.setBestRS(currentRsServerId,
+                NOTE_AVOID_YOYO_EFFECT.get(localServerId, currentRsServerId));
+            return;
           }
         }
 
-        if (sumOfLoadDistancesOfOtherRSsBd.floatValue() > 0)
-        {
-          /*
-          The average distance of the other RSs shows a lack of DSs.
-          Compute the number of DSs to disconnect from the current RS,
-          rounding to the nearest integer number. Do only this if there is
-          no risk of yoyo effect: when the exact balance cannot be
-          established due to the current number of DSs connected, do not
-          disconnect a DS. A simple example where the balance cannot be
-          reached is:
-          - RS1 has weight 1 and 2 DSs
-          - RS2 has weight 1 and 1 DS
-          => disconnecting a DS from RS1 to reconnect it to RS2 would have no
-          sense as this would lead to the reverse situation. In that case,
-          the perfect balance cannot be reached and we must stick to the
-          current situation, otherwise the DS would keep move between the 2
-          RSs
-          */
-          float notRoundedOverloadingDSsNumber = sumOfLoadDistancesOfOtherRSsBd.
-            multiply(BigDecimal.valueOf(sumOfConnectedDSs), mathContext)
-                .floatValue();
-          int overloadingDSsNumber = Math.round(notRoundedOverloadingDSsNumber);
-
-          // Avoid yoyo effect
-          if (overloadingDSsNumber == 1)
-          {
-            // What would be the new load distance for the current RS if
-            // we disconnect some DSs ?
-            ReplicationServerInfo currentReplicationServerInfo =
-              bestServers.get(currentRsServerId);
-
-            int currentRsWeight = currentReplicationServerInfo.getWeight();
-            BigDecimal currentRsWeightBd = BigDecimal.valueOf(currentRsWeight);
-            BigDecimal sumOfWeightsBd = BigDecimal.valueOf(sumOfWeights);
-            BigDecimal currentRsLoadGoalBd =
-              currentRsWeightBd.divide(sumOfWeightsBd, mathContext);
-            BigDecimal potentialCurrentRsNewLoadBd = BigDecimal.ZERO;
-            if (sumOfConnectedDSs != 0)
-            {
-              int connectedDSs = currentReplicationServerInfo.
-                getConnectedDSNumber();
-              BigDecimal potentialNewConnectedDSsBd =
-                  BigDecimal.valueOf(connectedDSs - 1);
-              BigDecimal sumOfConnectedDSsBd =
-                  BigDecimal.valueOf(sumOfConnectedDSs);
-              potentialCurrentRsNewLoadBd =
-                potentialNewConnectedDSsBd.divide(sumOfConnectedDSsBd,
-                  mathContext);
-            }
-            BigDecimal potentialCurrentRsNewLoadDistanceBd =
-              currentRsLoadGoalBd.subtract(potentialCurrentRsNewLoadBd,
-                mathContext);
-
-            // What would be the new load distance for the other RSs ?
-            BigDecimal additionalDsLoadBd =
-                BigDecimal.ONE.divide(
-                    BigDecimal.valueOf(sumOfConnectedDSs), mathContext);
-            BigDecimal potentialNewSumOfLoadDistancesOfOtherRSsBd =
-              sumOfLoadDistancesOfOtherRSsBd.subtract(additionalDsLoadBd,
-                    mathContext);
-
-            /*
-            Now compare both values: we must no disconnect the DS if this
-            is for going in a situation where the load distance of the other
-            RSs is the opposite of the future load distance of the local RS
-            or we would evaluate that we should disconnect just after being
-            arrived on the new RS. But we should disconnect if we reach the
-            perfect balance (both values are 0).
-            */
-            MathContext roundMc =
-              new MathContext(6, RoundingMode.DOWN);
-            BigDecimal potentialCurrentRsNewLoadDistanceBdRounded =
-              potentialCurrentRsNewLoadDistanceBd.round(roundMc);
-            BigDecimal potentialNewSumOfLoadDistancesOfOtherRSsBdRounded =
-              potentialNewSumOfLoadDistancesOfOtherRSsBd.round(roundMc);
-
-            if ((potentialCurrentRsNewLoadDistanceBdRounded.compareTo(
-              BigDecimal.ZERO) != 0)
-              && (potentialCurrentRsNewLoadDistanceBdRounded.equals(
-              potentialNewSumOfLoadDistancesOfOtherRSsBdRounded.negate())))
-            {
-              // Avoid the yoyo effect, and keep the local DS connected to its
-              // current RS
-              return bestServers.get(currentRsServerId);
-            }
-          }
-
-          // Prepare a sorted list (from lowest to highest) or DS server ids
-          // connected to the current RS
-          ReplicationServerInfo currentRsInfo =
+        ReplicationServerInfo currentRsInfo =
             bestServers.get(currentRsServerId);
-          List<Integer> serversConnectedToCurrentRS =
-            currentRsInfo.getConnectedDSs();
-          List<Integer> sortedServers = new ArrayList<Integer>(
-            serversConnectedToCurrentRS);
-          Collections.sort(sortedServers);
-
-          // Go through the list of DSs to disconnect and see if the local
-          // server is part of them.
-          int index = 0;
-          while (overloadingDSsNumber > 0)
-          {
-            int severToDisconnectId = sortedServers.get(index);
-            if (severToDisconnectId == localServerId)
-            {
-              // The local server is part of the DSs to disconnect
-              return null;
-            }
-            overloadingDSsNumber--;
-            index++;
-          }
-
+        if (isServerOverloadingRS(localServerId, currentRsInfo,
+            overloadingDSsNumber))
+        {
+          // The local server is part of the DSs to disconnect
+          evals.discardAll(NOTE_DISCONNECT_DS_FROM_OVERLOADED_RS.get(
+              localServerId, currentRsServerId));
+        }
+        else
+        {
           // The local server is not part of the servers to disconnect from the
           // current RS.
-          return bestServers.get(currentRsServerId);
-        } else
-        {
-          // The average distance of the other RSs does not show a lack of DSs:
-          // no need to disconnect any DS from the current RS.
-          return bestServers.get(currentRsServerId);
+          evals.setBestRS(currentRsServerId,
+              NOTE_DO_NOT_DISCONNECT_DS_FROM_OVERLOADED_RS.get(localServerId,
+                  currentRsServerId));
         }
-      } else
-      {
-        // The RS load goal is reached or there are not enough DSs connected to
-        // it to reach it: do not disconnect from this RS and return rsInfo for
-        // this RS
-        return bestServers.get(currentRsServerId);
+      } else {
+        // The average distance of the other RSs does not show a lack of DSs:
+        // no need to disconnect any DS from the current RS.
+        evals.setBestRS(currentRsServerId,
+            NOTE_NO_NEED_TO_REBALANCE_DSS_BETWEEN_RSS.get(localServerId,
+                currentRsServerId));
       }
+    } else {
+      // The RS load goal is reached or there are not enough DSs connected to
+      // it to reach it: do not disconnect from this RS and return rsInfo for
+      // this RS
+      evals.setBestRS(currentRsServerId,
+          NOTE_DO_NOT_DISCONNECT_DS_FROM_ACCEPTABLE_LOAD_RS.get(localServerId,
+              currentRsServerId));
     }
+  }
+
+  /**
+   * Returns whether the local DS is overloading the RS.
+   * <p>
+   * There are an "overloadingDSsNumber" of DS overloading the RS. The list of
+   * DSs connected to this RS is ordered by serverId to use a consistent
+   * ordering across all nodes in the topology. The serverIds which index in the
+   * List are lower than "overloadingDSsNumber" will be evicted first.
+   * <p>
+   * This ordering is unfair since nodes with the lower serverIds will be
+   * evicted more often than nodes with higher serverIds. However, it is a
+   * consistent and reliable ordering applicable anywhere in the topology.
+   */
+  private static boolean isServerOverloadingRS(int localServerId,
+      ReplicationServerInfo currentRsInfo, int overloadingDSsNumber)
+  {
+    List<Integer> serversConnectedToCurrentRS =
+        new ArrayList<Integer>(currentRsInfo.getConnectedDSs());
+    Collections.sort(serversConnectedToCurrentRS);
+
+    final int idx = serversConnectedToCurrentRS.indexOf(localServerId);
+    return idx != -1 && idx < overloadingDSsNumber;
   }
 
   /**
@@ -2238,8 +2491,8 @@ public class ReplicationBroker
 
     if (debugEnabled())
     {
-      TRACER.debugInfo(this + " end restart : connected=" + connected
-        + " with RSid=" + this.getRsServerId() + " genid=" + this.generationID);
+      debugInfo("end restart : connected=" + connected + " with RS("
+          + getRsServerId() + ") genId=" + this.generationID);
     }
   }
 
@@ -2298,8 +2551,8 @@ public class ReplicationBroker
 
         if (debugEnabled())
         {
-          TRACER.debugInfo("ReplicationBroker.publish() Publishing a "
-            + "message is not possible due to existing connection error.");
+          debugInfo("publish(): Publishing a message is not possible due to"
+              + " existing connection error.");
         }
 
         return false;
@@ -2400,8 +2653,8 @@ public class ReplicationBroker
             // ignore
             if (debugEnabled())
             {
-              TRACER.debugInfo("ReplicationBroker.publish() "
-                + "Interrupted exception raised : " + e.getLocalizedMessage());
+              debugInfo("publish(): Interrupted exception raised : "
+                  + e.getLocalizedMessage());
             }
           }
         }
@@ -2410,8 +2663,8 @@ public class ReplicationBroker
         // just loop.
         if (debugEnabled())
         {
-          TRACER.debugInfo("ReplicationBroker.publish() "
-            + "Interrupted exception raised." + e.getLocalizedMessage());
+          debugInfo("publish(): Interrupted exception raised."
+              + e.getLocalizedMessage());
         }
       }
     }
@@ -2560,13 +2813,14 @@ public class ReplicationBroker
             {
               // Stable topology (no topo msg since few seconds): proceed with
               // best server checking.
-              ReplicationServerInfo bestServerInfo =
+              final RSEvaluations evals =
                 computeBestReplicationServer(false, rsServerId, state,
-                replicationServerInfos, serverId, groupId,
-                generationID);
+                replicationServerInfos, serverId, groupId, generationID);
+              final ReplicationServerInfo bestServerInfo = evals.getBestRS();
 
-              if ((rsServerId != -1) && ((bestServerInfo == null) ||
-                (bestServerInfo.getServerId() != rsServerId)))
+              if (rsServerId != -1
+                  && (bestServerInfo == null
+                      || bestServerInfo.getServerId() != rsServerId))
               {
                 // The best replication server is no more the one we are
                 // currently using. Disconnect properly then reconnect.
@@ -2580,12 +2834,18 @@ public class ReplicationBroker
                 }
                 else
                 {
+                  final int bestRsServerId = bestServerInfo.getServerId();
                   message = NOTE_NEW_BEST_REPLICATION_SERVER.get(
                       serverId, replicationServerID,
                       savedSession.getReadableRemoteAddress(),
-                      bestServerInfo.getServerId(), baseDn);
+                      bestRsServerId, baseDn,
+                      evals.getEvaluation(replicationServerID).toString(),
+                      evals.getEvaluation(bestRsServerId).toString());
                 }
                 logError(message);
+                if (debugEnabled())
+                  debugInfo("best replication servers evaluation results: "
+                      + evals);
                 reStart(true);
               }
 
@@ -2639,14 +2899,12 @@ public class ReplicationBroker
   }
 
   /**
-   * Gets the States of all the Replicas currently in the
-   * Topology.
-   * When this method is called, a Monitoring message will be sent
-   * to the Replication Server to which this domain is currently connected
-   * so that it computes a table containing information about
-   * all Directory Servers in the topology.
-   * This Computation involves communications will all the servers
-   * currently connected and
+   * Gets the States of all the Replicas currently in the Topology. When this
+   * method is called, a Monitoring message will be sent to the Replication
+   * Server to which this domain is currently connected so that it computes a
+   * table containing information about all Directory Servers in the topology.
+   * This Computation involves communications will all the servers currently
+   * connected and
    *
    * @return The States of all Replicas in the topology (except us)
    */
@@ -2705,9 +2963,8 @@ public class ReplicationBroker
   public void stop()
   {
     if (debugEnabled())
-      TRACER.debugInfo("ReplicationBroker " + serverId + " is stopping and will"
-        + " close the connection to replication server " + rsServerId + " for"
-        + " domain " + baseDn);
+      debugInfo("is stopping and will close the connection to"
+          + " replication server " + rsServerId);
 
     synchronized (startStopLock)
     {
@@ -2930,12 +3187,10 @@ public class ReplicationBroker
    */
   public List<RSInfo> getRsList()
   {
-    List<RSInfo> result = new ArrayList<RSInfo>();
-
-    for (ReplicationServerInfo replicationServerInfo :
-      replicationServerInfos.values())
+    final List<RSInfo> result = new ArrayList<RSInfo>();
+    for (ReplicationServerInfo rsInfo : replicationServerInfos.values())
     {
-      result.add(replicationServerInfo.toRSInfo());
+      result.add(rsInfo.toRSInfo());
     }
     return result;
   }
@@ -2979,7 +3234,7 @@ public class ReplicationBroker
   public void receiveTopo(TopologyMsg topoMsg)
   {
     if (debugEnabled())
-      TRACER.debugInfo(this + " receive TopologyMsg=" + topoMsg);
+      debugInfo("receive TopologyMsg=" + topoMsg);
 
     // Store new DS list
     dsList = topoMsg.getDsList();
@@ -3068,8 +3323,7 @@ public class ReplicationBroker
     } else
     {
       if (debugEnabled())
-        TRACER.debugInfo(this
-          + " is not configured to send CN heartbeat interval");
+        debugInfo("is not configured to send CN heartbeat interval");
     }
   }
 
@@ -3181,4 +3435,11 @@ public class ReplicationBroker
       DirectoryServer.deregisterMonitorProvider(monitor);
     }
   }
+
+  private void debugInfo(String message)
+  {
+    TRACER.debugInfo(getClass().getSimpleName() + " for baseDN=" + baseDn
+      + " and serverId=" + getServerId() + " " + message);
+  }
+
 }
