@@ -23,15 +23,15 @@
  ! CDDL HEADER END
  !
  !
- !      Copyright 2013 ForgeRock AS
+ !      Copyright 2013-2014 ForgeRock AS
  ! -->
 <!-- Using entities prevent constantly declaring the same versions -->
 <!DOCTYPE ivy-module [
-    <!ENTITY grizzly.version    "2.3.3">
+    <!ENTITY grizzly.version    "2.3.4">
     <!-- Accept any 2.6.x version, even snapshots for continuous builds.
          Change this to a stable version when releasing OpenDJ 2.6.1. -->
-    <!ENTITY opendj.sdk.version "[2.6.0,2.6.20]">
-    <!ENTITY crest.version      "2.0.0">
+    <!ENTITY opendj.sdk.version "2.6.7">
+    <!ENTITY crest.version      "2.0.2">
 ]>
 <ivy-module version="2.0"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -49,7 +49,7 @@
     <dependency org="javax.mail"            name="mail"                     rev="1.4.5" />
     <!-- subsequent versions are not compatible with java 6, so force to use this version only -->
     <dependency org="javax.servlet"         name="javax.servlet-api"        rev="[3.1-b02]" />
-    <dependency org="com.sleepycat"         name="je"                       rev="5.0.73" />
+    <dependency org="com.sleepycat"         name="je"                       rev="5.0.97" />
     <dependency org="org.forgerock.opendj"  name="opendj-rest2ldap-servlet" rev="&opendj.sdk.version;" />
     <dependency org="org.forgerock.opendj"  name="opendj-server2x-adapter"  rev="&opendj.sdk.version;">
       <!-- This is the OpenDJ server module :) -->
@@ -76,7 +76,7 @@
     <dependency org="org.forgerock.commons" name="json-fluent"              rev="&crest.version;"      conf="default->master,sources"/>
     <dependency org="org.forgerock.commons" name="json-resource"            rev="&crest.version;"      conf="default->master,sources"/>
     <dependency org="org.forgerock.commons" name="json-resource-servlet"    rev="&crest.version;"      conf="default->master,sources"/>
-    <dependency org="org.forgerock.commons" name="org.forgerock.util"       rev="1.0.0"                conf="default->master,sources"/>
+    <dependency org="org.forgerock.commons" name="org.forgerock.util"       rev="1.1.0"                conf="default->master,sources"/>
     <dependency org="org.forgerock.opendj"  name="opendj-ldap-sdk"          rev="&opendj.sdk.version;" conf="default->master,sources"/>
     <dependency org="org.forgerock.opendj"  name="opendj-rest2ldap"         rev="&opendj.sdk.version;" conf="default->master,sources"/>
     -->
