@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2013 ForgeRock AS
+ *      Copyright 2013-2014 ForgeRock AS
  */
 package org.opends.server.protocols.http;
 
@@ -967,7 +967,7 @@ public class HTTPConnectionHandler extends
     if (this.httpServer != null)
     {
       TRACER.debugInfo("Stopping HTTP server...");
-      this.httpServer.stop();
+      this.httpServer.shutdownNow();
       cleanUpHttpServer();
       TRACER.debugInfo("HTTP server stopped");
       logError(NOTE_CONNHANDLER_STOPPED_LISTENING.get(handlerName));
