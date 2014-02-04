@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2013 ForgeRock AS
+ *      Copyright 2013-2014 ForgeRock AS
  */
 
 package org.opends.server.tools.upgrade;
@@ -297,7 +297,9 @@ public final class Upgrade
             rebuildSingleIndex(INFO_UPGRADE_TASK_9013_DESCRIPTION.get(),
                 "ds-sync-hist")));
 
-
+    /** See OPENDJ-1295 */
+    register("2.6.1.10245",
+        copySchemaFile("03-pwpolicyextension.ldif"));
 
     /*
      * All upgrades will refresh the server configuration schema and generate
