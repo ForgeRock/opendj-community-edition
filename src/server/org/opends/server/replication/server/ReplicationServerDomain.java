@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2013 ForgeRock AS
+ *      Portions copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
 
@@ -31,10 +31,17 @@ import static org.opends.messages.ReplicationMessages.*;
 import static org.opends.server.loggers.ErrorLogger.logError;
 import static org.opends.server.loggers.debug.DebugLogger.debugEnabled;
 import static org.opends.server.loggers.debug.DebugLogger.getTracer;
+import static org.opends.server.replication.common.ServerStatus.DEGRADED_STATUS;
+import static org.opends.server.replication.common.ServerStatus.NORMAL_STATUS;
+import static org.opends.server.replication.common.StatusMachineEvent.TO_DEGRADED_STATUS_EVENT;
+import static org.opends.server.replication.common.StatusMachineEvent.TO_NORMAL_STATUS_EVENT;
+import static org.opends.server.replication.protocol.ProtocolVersion.REPLICATION_PROTOCOL_V3;
+import static org.opends.server.util.StaticUtils.sleep;
 import static org.opends.server.util.StaticUtils.stackTraceToSingleLineString;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -75,9 +82,10 @@ import com.sleepycat.je.DatabaseException;
 public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
 {
   private final String baseDn;
+
   // The Status analyzer that periodically verifies if the connected DSs are
   // late or not
-  private StatusAnalyzer statusAnalyzer = null;
+  private final StatusAnalyzer statusAnalyzer;
 
   // The monitoring publisher that periodically sends monitoring messages to the
   // topology
@@ -194,6 +202,87 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
   private ServerState ctHeartbeatState = null;
 
   /**
+   * Stores pending status messages such as DS change time heartbeats for future
+   * forwarding to the rest of the topology. This class is required in order to
+   * decouple inbound IO processing from outbound IO processing and avoid
+   * potential inter-process deadlocks. In particular, the {@code ServerReader}
+   * thread must not send messages.
+   */
+  private static class PendingStatusMessages
+  {
+    private final Map<Integer, ChangeTimeHeartbeatMsg> pendingHeartbeats =
+        new HashMap<Integer, ChangeTimeHeartbeatMsg>(1);
+    private final Map<Integer, MonitorMsg> pendingDSMonitorMsgs =
+        new HashMap<Integer, MonitorMsg>(1);
+    private final Map<Integer, MonitorMsg> pendingRSMonitorMsgs =
+        new HashMap<Integer, MonitorMsg>(1);
+    private boolean sendRSTopologyMsg;
+    private boolean sendDSTopologyMsg;
+    private int excludedDSForTopologyMsg = -1;
+
+    /**
+     * Enqueues a TopologyMsg for all the connected directory servers in order
+     * to let them know the topology (every known DSs and RSs).
+     *
+     * @param excludedDS
+     *          If not null, the topology message will not be sent to this DS.
+     */
+    private void enqueueTopoInfoToAllDSsExcept(DataServerHandler excludedDS)
+    {
+      int excludedServerId = excludedDS != null ? excludedDS.getServerId() : -1;
+      if (sendDSTopologyMsg)
+      {
+        if (excludedServerId != excludedDSForTopologyMsg)
+        {
+          excludedDSForTopologyMsg = -1;
+        }
+      }
+      else
+      {
+        sendDSTopologyMsg = true;
+        excludedDSForTopologyMsg = excludedServerId;
+      }
+    }
+
+    /**
+     * Enqueues a TopologyMsg for all the connected replication servers in order
+     * to let them know our connected LDAP servers.
+     */
+    private void enqueueTopoInfoToAllRSs()
+    {
+      sendRSTopologyMsg = true;
+    }
+
+    /**
+     * Enqueues a ChangeTimeHeartbeatMsg received from a DS for forwarding to
+     * all other RS instances.
+     *
+     * @param msg
+     *          The heartbeat message.
+     */
+    private void enqueueChangeTimeHeartbeatMsg(ChangeTimeHeartbeatMsg msg)
+    {
+      pendingHeartbeats.put(msg.getChangeNumber().getServerId(), msg);
+    }
+
+    private void enqueueDSMonitorMsg(int dsServerId, MonitorMsg msg)
+    {
+      pendingDSMonitorMsgs.put(dsServerId, msg);
+    }
+
+    private void enqueueRSMonitorMsg(int rsServerId, MonitorMsg msg)
+    {
+      pendingRSMonitorMsgs.put(rsServerId, msg);
+    }
+  }
+
+  private final Object pendingStatusMessagesLock = new Object();
+
+  /** @GuardedBy("pendingStatusMessagesLock") */
+  private PendingStatusMessages pendingStatusMessages =
+      new PendingStatusMessages();
+
+  /**
    * Creates a new ReplicationServerDomain associated to the DN baseDn.
    *
    * @param baseDn The baseDn associated to the ReplicationServerDomain.
@@ -208,7 +297,8 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
     this.assuredTimeoutTimer = new Timer("Replication server RS("
         + replicationServer.getServerId()
         + ") assured timer for domain \"" + baseDn + "\"", true);
-
+    this.statusAnalyzer = new StatusAnalyzer(this);
+    this.statusAnalyzer.start();
     DirectoryServer.registerMonitorProvider(this);
   }
 
@@ -1049,54 +1139,17 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
           stopMonitoringPublisher();
         }
 
-        if (handler.isReplicationServer())
+        if (replicationServers.containsKey(handler.getServerId()))
         {
-          if (replicationServers.containsKey(handler.getServerId()))
-          {
-            unregisterServerHandler(handler);
-            handler.shutdown();
-
-            // Check if generation id has to be reset
-            mayResetGenerationId();
-            if (!shutdown)
-            {
-              // Warn our DSs that a RS or DS has quit (does not use this
-              // handler as already removed from list)
-              buildAndSendTopoInfoToDSs(null);
-            }
-          }
-        } else if (directoryServers.containsKey(handler.getServerId()))
+          unregisterServerHandler(handler, shutdown, false);
+        }
+        else if (directoryServers.containsKey(handler.getServerId()))
         {
-          // If this is the last DS for the domain,
-          // shutdown the status analyzer
-          if (directoryServers.size() == 1)
-          {
-            if (debugEnabled())
-              TRACER.debugInfo("In " +
-                replicationServer.getMonitorInstanceName() +
-                " remote server " + handler.getMonitorInstanceName() +
-                " is the last DS to be stopped: stopping status analyzer");
-            stopStatusAnalyzer();
-          }
-
-          unregisterServerHandler(handler);
-          handler.shutdown();
-
-          // Check if generation id has to be reset
-          mayResetGenerationId();
-          if (!shutdown)
-          {
-            // Update the remote replication servers with our list
-            // of connected LDAP servers
-            buildAndSendTopoInfoToRSs();
-            // Warn our DSs that a RS or DS has quit (does not use this
-            // handler as already removed from list)
-            buildAndSendTopoInfoToDSs(null);
-          }
-        } else if (otherHandlers.contains(handler))
+          unregisterServerHandler(handler, shutdown, true);
+        }
+        else if (otherHandlers.contains(handler))
         {
-          unRegisterHandler(handler);
-          handler.shutdown();
+          unregisterOtherHandler(handler);
         }
       }
       catch(Exception e)
@@ -1111,6 +1164,37 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
           release();
         }
       }
+    }
+  }
+
+  private void unregisterOtherHandler(MessageHandler mHandler)
+  {
+    unRegisterHandler(mHandler);
+    mHandler.shutdown();
+  }
+
+  private void unregisterServerHandler(ServerHandler sHandler,
+      boolean shutdown, boolean isDirectoryServer)
+  {
+    unregisterServerHandler(sHandler);
+    sHandler.shutdown();
+
+    mayResetGenerationId();
+    if (!shutdown)
+    {
+      synchronized (pendingStatusMessagesLock)
+      {
+        if (isDirectoryServer)
+        {
+          // Update the remote replication servers with our list
+          // of connected LDAP servers
+          pendingStatusMessages.enqueueTopoInfoToAllRSs();
+        }
+        // Warn our DSs that a RS or DS has quit (does not use this
+        // handler as already removed from list)
+        pendingStatusMessages.enqueueTopoInfoToAllDSsExcept(null);
+      }
+      statusAnalyzer.notifyPendingStatusMessage();
     }
   }
 
@@ -1529,174 +1613,199 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
   }
 
   /**
-   * Processes a message coming from one server in the topology
-   * and potentially forwards it to one or all other servers.
+   * Processes a message coming from one server in the topology and potentially
+   * forwards it to one or all other servers.
    *
-   * @param msg The message received and to be processed.
-   * @param senderHandler The server handler of the server that emitted
-   * the message.
+   * @param msg
+   *          The message received and to be processed.
+   * @param sender
+   *          The server handler of the server that sent the message.
    */
-  public void process(RoutableMsg msg, ServerHandler senderHandler)
+  void process(RoutableMsg msg, ServerHandler sender)
   {
-    // Test the message for which a ReplicationServer is expected
-    // to be the destination
-    if (!(msg instanceof InitializeRequestMsg) &&
-        !(msg instanceof InitializeTargetMsg) &&
-        !(msg instanceof InitializeRcvAckMsg) &&
-        !(msg instanceof EntryMsg) &&
-        !(msg instanceof DoneMsg) &&
-        (msg.getDestination() == this.replicationServer.getServerId()))
+    if (msg.getDestination() == replicationServer.getServerId())
     {
+      // Handle routable messages targeted at this RS.
       if (msg instanceof ErrorMsg)
       {
-        ErrorMsg errorMsg = (ErrorMsg) msg;
-        logError(ERR_ERROR_MSG_RECEIVED.get(
-          errorMsg.getDetails()));
-      } else if (msg instanceof MonitorRequestMsg)
+        logError(ERR_ERROR_MSG_RECEIVED.get(((ErrorMsg) msg).getDetails()));
+      }
+      else
       {
-        // If the request comes from a Directory Server we need to
-        // build the full list of all servers in the topology
-        // and send back a MonitorMsg with the full list of all the servers
-        // in the topology.
-        if (senderHandler.isDataServer())
-        {
-          // Monitoring information requested by a DS
-          MonitorMsg monitorMsg = createGlobalTopologyMonitorMsg(
-              msg.getDestination(), msg.getSenderID(), monitorData);
-
-          if (monitorMsg != null)
-          {
-            try
-            {
-              senderHandler.send(monitorMsg);
-            }
-            catch (IOException e)
-            {
-              // the connection was closed.
-            }
-          }
-          return;
-        } else
-        {
-          // Monitoring information requested by a RS
-          MonitorMsg monitorMsg =
-            createLocalTopologyMonitorMsg(msg.getDestination(),
-            msg.getSenderID());
-
-          if (monitorMsg != null)
-          {
-            try
-            {
-              senderHandler.send(monitorMsg);
-            } catch (Exception e)
-            {
-              // We log the error. The requestor will detect a timeout or
-              // any other failure on the connection.
-              logError(ERR_CHANGELOG_ERROR_SENDING_MSG.get(
-                  Integer.toString((msg.getDestination()))));
-            }
-          }
-        }
-      } else if (msg instanceof MonitorMsg)
+        replyWithUnroutableMsgType(sender, msg);
+      }
+    }
+    else
+    {
+      // Forward message not destined for this RS.
+      List<ServerHandler> servers = getDestinationServers(msg, sender);
+      if (!servers.isEmpty())
       {
-        MonitorMsg monitorMsg = (MonitorMsg) msg;
-        receivesMonitorDataResponse(monitorMsg, senderHandler.getServerId());
-      } else
+        forwardMsgToAllServers(msg, servers, sender);
+      }
+      else
       {
-        logError(NOTE_ERR_ROUTING_TO_SERVER.get(
-          msg.getClass().getCanonicalName()));
+        replyWithUnreachablePeerMsg(sender, msg);
+      }
+    }
+  }
 
-        MessageBuilder mb1 = new MessageBuilder();
-        mb1.append(
-            NOTE_ERR_ROUTING_TO_SERVER.get(msg.getClass().getCanonicalName()));
-        mb1.append("serverID:").append(msg.getDestination());
-        ErrorMsg errMsg = new ErrorMsg(msg.getSenderID(), mb1.toMessage());
+  /**
+   * Responds to a monitor request message.
+   *
+   * @param msg
+   *          The monitor request message.
+   * @param sender
+   *          The DS/RS which sent the monitor request.
+   */
+  void processMonitorRequestMsg(MonitorRequestMsg msg, ServerHandler sender)
+  {
+    enqueueMonitorMsg(msg, sender);
+  }
+
+  private void enqueueMonitorMsg(MonitorRequestMsg msg, ServerHandler sender)
+  {
+    /*
+     * If the request comes from a Directory Server we need to build the full
+     * list of all servers in the topology and send back a MonitorMsg with the
+     * full list of all the servers in the topology.
+     */
+    if (sender.isDataServer())
+    {
+      MonitorMsg monitorMsg =
+          createGlobalTopologyMonitorMsg(msg.getDestination(), msg
+              .getSenderID(), monitorData);
+      synchronized (pendingStatusMessagesLock)
+      {
+        pendingStatusMessages.enqueueDSMonitorMsg(sender.getServerId(),
+            monitorMsg);
+      }
+    }
+    else
+    {
+      MonitorMsg monitorMsg =
+          createLocalTopologyMonitorMsg(msg.getDestination(), msg.getSenderID());
+      synchronized (pendingStatusMessagesLock)
+      {
+        pendingStatusMessages.enqueueRSMonitorMsg(sender.getServerId(),
+            monitorMsg);
+      }
+    }
+    statusAnalyzer.notifyPendingStatusMessage();
+  }
+
+  /**
+   * Responds to a monitor message.
+   *
+   * @param msg
+   *          The monitor message
+   * @param sender
+   *          The DS/RS which sent the monitor.
+   */
+  void processMonitorMsg(MonitorMsg msg, ServerHandler sender)
+  {
+    receivesMonitorDataResponse(msg, sender.getServerId());
+  }
+
+  private void replyWithUnroutableMsgType(ServerHandler msgEmitter,
+      RoutableMsg msg)
+  {
+    String msgClassname = msg.getClass().getCanonicalName();
+    logError(NOTE_ERR_ROUTING_TO_SERVER.get(msgClassname));
+
+    MessageBuilder mb = new MessageBuilder();
+    mb.append(NOTE_ERR_ROUTING_TO_SERVER.get(msgClassname));
+    mb.append("serverID:").append(msg.getDestination());
+    ErrorMsg errMsg = new ErrorMsg(msg.getSenderID(), mb.toMessage());
+    try
+    {
+      msgEmitter.send(errMsg);
+    }
+    catch (IOException ignored)
+    {
+      // an error happened on the sender session trying to recover
+      // from an error on the receiver session.
+      // Not much more we can do at this point.
+    }
+  }
+
+  private void replyWithUnreachablePeerMsg(ServerHandler msgEmitter,
+      RoutableMsg msg)
+  {
+    MessageBuilder mb = new MessageBuilder();
+    mb.append(ERR_NO_REACHABLE_PEER_IN_THE_DOMAIN.get(baseDn, Integer
+        .toString(msg.getDestination())));
+    mb.append(" In Replication Server=").append(
+        this.replicationServer.getMonitorInstanceName());
+    mb.append(" unroutable message =").append(msg.getClass().getSimpleName());
+    mb.append(" Details:routing table is empty");
+    final Message message = mb.toMessage();
+    logError(message);
+
+    ErrorMsg errMsg =
+        new ErrorMsg(this.replicationServer.getServerId(), msg
+            .getSenderID(), message);
+    try
+    {
+      msgEmitter.send(errMsg);
+    }
+    catch (IOException ignored)
+    {
+      // TODO Handle error properly (sender timeout in addition)
+      /*
+       * An error happened trying to send an error msg to this server. Log an
+       * error and close the connection to this server.
+       */
+      MessageBuilder mb2 = new MessageBuilder();
+      mb2.append(ERR_CHANGELOG_ERROR_SENDING_ERROR.get(this.toString()));
+      mb2.append(" ");
+      mb2.append(stackTraceToSingleLineString(ignored));
+      logError(mb2.toMessage());
+      stopServer(msgEmitter, false);
+    }
+  }
+
+  private void forwardMsgToAllServers(RoutableMsg msg,
+      List<ServerHandler> servers, ServerHandler sender)
+  {
+    for (ServerHandler targetHandler : servers)
+    {
+      try
+      {
+        targetHandler.send(msg);
+      }
+      catch (IOException ioe)
+      {
+        /*
+         * An error happened trying to send a routable message to its
+         * destination server. Send back an error to the originator of the
+         * message.
+         */
+        MessageBuilder mb = new MessageBuilder();
+        mb.append(ERR_NO_REACHABLE_PEER_IN_THE_DOMAIN.get(baseDn, Integer
+            .toString(msg.getDestination())));
+        mb.append(" unroutable message =" + msg.getClass().getSimpleName());
+        mb.append(" Details: " + ioe.getLocalizedMessage());
+        final Message message = mb.toMessage();
+        logError(message);
+
+        ErrorMsg errMsg = new ErrorMsg(msg.getSenderID(), message);
         try
         {
-          senderHandler.send(errMsg);
-        } catch (IOException ioe1)
+          sender.send(errMsg);
+        }
+        catch (IOException ioe1)
         {
           // an error happened on the sender session trying to recover
           // from an error on the receiver session.
-          // Not much more we can do at this point.
+          // We don't have much solution left beside closing the sessions.
+          stopServer(sender, false);
+          stopServer(targetHandler, false);
         }
-      }
-      return;
-    }
-
-    List<ServerHandler> servers = getDestinationServers(msg, senderHandler);
-
-    if (servers.isEmpty())
-    {
-      MessageBuilder mb = new MessageBuilder();
-      mb.append(ERR_NO_REACHABLE_PEER_IN_THE_DOMAIN.get(
-          this.baseDn, Integer.toString(msg.getDestination())));
-      mb.append(" In Replication Server=").append(
-        this.replicationServer.getMonitorInstanceName());
-      mb.append(" unroutable message =").append(msg.getClass().getSimpleName());
-      mb.append(" Details:routing table is empty");
-      ErrorMsg errMsg = new ErrorMsg(
-        this.replicationServer.getServerId(),
-        msg.getSenderID(),
-        mb.toMessage());
-      logError(mb.toMessage());
-      try
-      {
-        senderHandler.send(errMsg);
-      } catch (IOException ioe)
-      {
         // TODO Handle error properly (sender timeout in addition)
-        /*
-         * An error happened trying to send an error msg to this server.
-         * Log an error and close the connection to this server.
-         */
-        MessageBuilder mb2 = new MessageBuilder();
-        mb2.append(ERR_CHANGELOG_ERROR_SENDING_ERROR.get(this.toString()));
-        mb2.append(stackTraceToSingleLineString(ioe));
-        logError(mb2.toMessage());
-        stopServer(senderHandler, false);
-      }
-    } else
-    {
-      for (ServerHandler targetHandler : servers)
-      {
-        try
-        {
-          targetHandler.send(msg);
-        } catch (IOException ioe)
-        {
-          /*
-           * An error happened trying the send a routable message
-           * to its destination server.
-           * Send back an error to the originator of the message.
-           */
-          MessageBuilder mb1 = new MessageBuilder();
-          mb1.append(ERR_NO_REACHABLE_PEER_IN_THE_DOMAIN.get(
-              this.baseDn, Integer.toString(msg.getDestination())));
-          mb1.append(" unroutable message =" + msg.getClass().getSimpleName());
-          mb1.append(" Details: " + ioe.getLocalizedMessage());
-          ErrorMsg errMsg = new ErrorMsg(
-            msg.getSenderID(), mb1.toMessage());
-          logError(mb1.toMessage());
-          try
-          {
-            senderHandler.send(errMsg);
-          } catch (IOException ioe1)
-          {
-            // an error happened on the sender session trying to recover
-            // from an error on the receiver session.
-            // We don't have much solution left beside closing the sessions.
-            stopServer(senderHandler, false);
-            stopServer(targetHandler, false);
-          }
-        // TODO Handle error properly (sender timeout in addition)
-        }
       }
     }
-
   }
-
-
 
   /**
    * Creates a new monitor message including monitoring information for the
@@ -1760,47 +1869,27 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
    */
   public MonitorMsg createLocalTopologyMonitorMsg(int sender, int destination)
   {
-    try
+    MonitorMsg monitorMsg = new MonitorMsg(sender, destination);
+    monitorMsg.setReplServerDbState(this.getDbServerState());
+
+    // Populate for each connected LDAP Server
+    // from the states stored in the serverHandler.
+    // - the server state
+    // - the older missing change
+    for (DataServerHandler lsh : this.directoryServers.values())
     {
-      // Lock domain as we need to go through connected servers list
-      lock();
-    }
-    catch (InterruptedException e)
-    {
-      return null;
+      monitorMsg.setServerState(lsh.getServerId(), lsh.getServerState(), lsh
+          .getApproxFirstMissingDate(), true);
     }
 
-    try
+    // Same for the connected RS
+    for (ReplicationServerHandler rsh : this.replicationServers.values())
     {
-      MonitorMsg monitorMsg = new MonitorMsg(sender, destination);
-
-      // Populate for each connected LDAP Server
-      // from the states stored in the serverHandler.
-      // - the server state
-      // - the older missing change
-      for (DataServerHandler lsh : this.directoryServers.values())
-      {
-        monitorMsg.setServerState(lsh.getServerId(),
-            lsh.getServerState(), lsh.getApproxFirstMissingDate(),
-            true);
-      }
-
-      // Same for the connected RS
-      for (ReplicationServerHandler rsh : this.replicationServers.values())
-      {
-        monitorMsg.setServerState(rsh.getServerId(),
-            rsh.getServerState(), rsh.getApproxFirstMissingDate(),
-            false);
-      }
-
-      // Populate the RS state in the msg from the DbState
-      monitorMsg.setReplServerDbState(this.getDbServerState());
-      return monitorMsg;
+      monitorMsg.setServerState(rsh.getServerId(), rsh.getServerState(), rsh
+          .getApproxFirstMissingDate(), false);
     }
-    finally
-    {
-      release();
-    }
+
+    return monitorMsg;
   }
 
   /**
@@ -1812,9 +1901,8 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
 
     // Terminate the assured timer
     assuredTimeoutTimer.cancel();
-
+    statusAnalyzer.shutdown();
     stopAllServers(true);
-
     stopDbHandlers();
   }
 
@@ -1856,90 +1944,6 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
   public String toString()
   {
     return "ReplicationServerDomain " + baseDn;
-  }
-
-  /**
-   * Send a TopologyMsg to all the connected directory servers in order to
-   * let them know the topology (every known DSs and RSs).
-   * @param notThisOne If not null, the topology message will not be sent to
-   * this passed server.
-   */
-  public void buildAndSendTopoInfoToDSs(ServerHandler notThisOne)
-  {
-    for (DataServerHandler handler : directoryServers.values())
-    {
-      if ((notThisOne == null) || ((handler != notThisOne)))
-        // All except passed one
-      {
-        for (int i=1; i<=2; i++)
-        {
-          if (!handler.shuttingDown())
-          {
-            if (handler.getStatus() != ServerStatus.NOT_CONNECTED_STATUS)
-            {
-              TopologyMsg topoMsg=createTopologyMsgForDS(handler.getServerId());
-              try
-              {
-                handler.sendTopoInfo(topoMsg);
-                break;
-              }
-              catch (IOException e)
-              {
-                if (i==2)
-                {
-                  Message message = ERR_EXCEPTION_SENDING_TOPO_INFO.get(
-                      baseDn,
-                      "directory",
-                      Integer.toString(handler.getServerId()),
-                      e.getMessage());
-                  logError(message);
-                }
-              }
-            }
-          }
-          try { Thread.sleep(100); } catch(Exception e) {}
-        }
-      }
-    }
-  }
-
-  /**
-   * Send a TopologyMsg to all the connected replication servers
-   * in order to let them know our connected LDAP servers.
-   */
-  public void buildAndSendTopoInfoToRSs()
-  {
-    TopologyMsg topoMsg = createTopologyMsgForRS();
-    for (ReplicationServerHandler handler : replicationServers.values())
-    {
-      for (int i=1; i<=2; i++)
-      {
-        if (!handler.shuttingDown())
-        {
-          if (handler.getStatus() != ServerStatus.NOT_CONNECTED_STATUS)
-          {
-            try
-            {
-              handler.sendTopoInfo(topoMsg);
-              break;
-            }
-            catch (IOException e)
-            {
-              if (i==2)
-              {
-                Message message = ERR_EXCEPTION_SENDING_TOPO_INFO.get(
-                    baseDn,
-                    "replication",
-                    Integer.toString(handler.getServerId()),
-                    e.getMessage());
-                logError(message);
-              }
-            }
-          }
-        }
-        try { Thread.sleep(100); } catch(Exception e) {}
-      }
-    }
   }
 
   /**
@@ -2163,8 +2167,7 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
       // (consecutive to reset gen id message), we prefer advertising once for
       // all after changes (less packet sent), here at the end of the reset msg
       // treatment.
-      buildAndSendTopoInfoToDSs(null);
-      buildAndSendTopoInfoToRSs();
+      sendTopoInfoToAll();
 
       Message message = NOTE_RESET_GENERATION_ID.get(baseDn, newGenId);
       logError(message);
@@ -2223,8 +2226,7 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
       }
 
       // Update every peers (RS/DS) with topology changes
-      buildAndSendTopoInfoToDSs(senderHandler);
-      buildAndSendTopoInfoToRSs();
+      enqueueTopoInfoToAllExcept(senderHandler);
 
       Message message = NOTE_DIRECTORY_SERVER_CHANGED_STATUS.get(
           senderHandler.getServerId(), baseDn, newStatus.toString());
@@ -2248,7 +2250,7 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
    * @param event The event to be used for new status computation
    * @return True if we have been interrupted (must stop), false otherwise
    */
-  public boolean changeStatusFromStatusAnalyzer(
+  private boolean changeStatus(
       DataServerHandler serverHandler, StatusMachineEvent event)
   {
     try
@@ -2308,8 +2310,7 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
       }
 
       // Update every peers (RS/DS) with topology changes
-      buildAndSendTopoInfoToDSs(serverHandler);
-      buildAndSendTopoInfoToRSs();
+      enqueueTopoInfoToAllExcept(serverHandler);
     }
     catch (Exception e)
     {
@@ -2322,6 +2323,30 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
     }
 
     return false;
+  }
+
+  /**
+   * Update every peers (RS/DS) with topology changes.
+   */
+  public void sendTopoInfoToAll()
+  {
+    enqueueTopoInfoToAllExcept(null);
+  }
+
+  /**
+   * Update every peers (RS/DS) with topology changes but one DS.
+   *
+   * @param dsHandler
+   *          if not null, the topology message will not be sent to this DS
+   */
+  private void enqueueTopoInfoToAllExcept(DataServerHandler dsHandler)
+  {
+    synchronized (pendingStatusMessagesLock)
+    {
+      pendingStatusMessages.enqueueTopoInfoToAllDSsExcept(dsHandler);
+      pendingStatusMessages.enqueueTopoInfoToAllRSs();
+    }
+    statusAnalyzer.notifyPendingStatusMessage();
   }
 
   /**
@@ -2481,7 +2506,11 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
        * Sends the currently known topology information to every connected
        * DS we have.
        */
-      buildAndSendTopoInfoToDSs(null);
+      synchronized (pendingStatusMessagesLock)
+      {
+        pendingStatusMessages.enqueueTopoInfoToAllDSsExcept(null);
+      }
+      statusAnalyzer.notifyPendingStatusMessage();
     }
     catch(Exception e)
     {
@@ -2885,57 +2914,6 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
   }
 
   /**
-   * Starts the status analyzer for the domain.
-   */
-  public void startStatusAnalyzer()
-  {
-    if (statusAnalyzer == null)
-    {
-      int degradedStatusThreshold =
-        replicationServer.getDegradedStatusThreshold();
-      if (degradedStatusThreshold > 0) // 0 means no status analyzer
-      {
-        statusAnalyzer = new StatusAnalyzer(this, degradedStatusThreshold);
-        statusAnalyzer.start();
-      }
-    }
-  }
-
-  /**
-   * Stops the status analyzer for the domain.
-   */
-  public void stopStatusAnalyzer()
-  {
-    if (statusAnalyzer != null)
-    {
-      statusAnalyzer.shutdown();
-      statusAnalyzer.waitForShutdown();
-      statusAnalyzer = null;
-    }
-  }
-
-  /**
-   * Tests if the status analyzer for this domain is running.
-   * @return True if the status analyzer is running, false otherwise.
-   */
-  public boolean isRunningStatusAnalyzer()
-  {
-    return (statusAnalyzer != null);
-  }
-
-  /**
-   * Update the status analyzer with the new threshold value.
-   * @param degradedStatusThreshold The new threshold value.
-   */
-  public void updateStatusAnalyzer(int degradedStatusThreshold)
-  {
-    if (statusAnalyzer != null)
-    {
-      statusAnalyzer.setDegradedStatusThreshold(degradedStatusThreshold);
-    }
-  }
-
-  /**
    * Starts the monitoring publisher for the domain.
    */
   public void startMonitoringPublisher()
@@ -3259,56 +3237,21 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
    * @param senderHandler The handler for the server that sent the heartbeat.
    * @param msg The message to process.
    */
-  public void processChangeTimeHeartbeatMsg(ServerHandler senderHandler,
+  void processChangeTimeHeartbeatMsg(ServerHandler senderHandler,
       ChangeTimeHeartbeatMsg msg )
   {
-    try
+    storeReceivedCTHeartbeat(msg.getChangeNumber());
+    if (senderHandler.isDataServer())
     {
-      // Acquire lock on domain (see more details in comment of start() method
-      // of ServerHandler)
-      lock();
-    }
-    catch (InterruptedException ex)
-    {
-      // We can't deal with this here, so re-interrupt thread so that it is
-      // caught during subsequent IO.
-      Thread.currentThread().interrupt();
-      return;
-    }
-
-    try
-    {
-      storeReceivedCTHeartbeat(msg.getChangeNumber());
-      if (senderHandler.isDataServer())
+      /*
+       * If we are the first replication server warned, then forward the message
+       * to the remote replication servers.
+       */
+      synchronized (pendingStatusMessagesLock)
       {
-        // If we are the first replication server warned,
-        // then forwards the message to the remote replication servers
-        for (ReplicationServerHandler rsHandler : replicationServers
-            .values())
-        {
-          try
-          {
-            if (rsHandler.getProtocolVersion() >=
-              ProtocolVersion.REPLICATION_PROTOCOL_V3)
-            {
-              rsHandler.send(msg);
-            }
-          }
-          catch (IOException e)
-          {
-            TRACER.debugCaught(DebugLogLevel.ERROR, e);
-            logError(ERR_CHANGELOG_ERROR_SENDING_MSG
-                .get("Replication Server "
-                    + replicationServer.getReplicationPort() + " "
-                    + baseDn + " " + replicationServer.getServerId()));
-            stopServer(rsHandler, false);
-          }
-        }
+        pendingStatusMessages.enqueueChangeTimeHeartbeatMsg(msg);
       }
-    }
-    finally
-    {
-      release();
+      statusAnalyzer.notifyPendingStatusMessage();
     }
   }
 
@@ -3405,5 +3348,215 @@ public class ReplicationServerDomain extends MonitorProvider<MonitorProviderCfg>
       }
     }
     return latest;
+  }
+
+  /**
+   * Go through each connected DS, get the number of pending changes we have for
+   * it and change status accordingly if threshold value is crossed/uncrossed.
+   */
+  void checkDSDegradedStatus()
+  {
+    final int degradedStatusThreshold =
+        replicationServer.getDegradedStatusThreshold();
+    // Threshold value = 0 means no status analyzer (no degrading system)
+    // we should not have that as the status analyzer thread should not be
+    // created if this is the case, but for sanity purpose, we add this
+    // test
+    if (degradedStatusThreshold > 0)
+    {
+      for (DataServerHandler serverHandler : directoryServers.values())
+      {
+        // Get number of pending changes for this server
+        final int nChanges = serverHandler.getRcvMsgQueueSize();
+        if (debugEnabled())
+        {
+          TRACER.debugInfo("In RS " + replicationServer.getServerId()
+              + ", for baseDN=" + getBaseDn() + ": " + "Status analyzer: DS "
+              + serverHandler.getServerId() + " has " + nChanges
+              + " message(s) in writer queue.");
+        }
+
+        // Check status to know if it is relevant to change the status. Do not
+        // take RSD lock to test. If we attempt to change the status whereas
+        // the current status does allow it, this will be noticed by
+        // the changeStatusFromStatusAnalyzer() method. This allows to take the
+        // lock roughly only when needed versus every sleep time timeout.
+        if (nChanges >= degradedStatusThreshold)
+        {
+          if (serverHandler.getStatus() == NORMAL_STATUS
+              && changeStatus(serverHandler,
+                  TO_DEGRADED_STATUS_EVENT))
+          {
+            break; // Interrupted.
+          }
+        }
+        else
+        {
+          if (serverHandler.getStatus() == DEGRADED_STATUS
+              && changeStatus(serverHandler,
+                  TO_NORMAL_STATUS_EVENT))
+          {
+            break; // Interrupted.
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Sends any enqueued status messages to the rest of the topology.
+   */
+  void sendPendingStatusMessages()
+  {
+    /*
+     * Take a snapshot of pending status notifications in order to avoid holding
+     * the broadcast lock for too long. In addition, clear the notifications so
+     * that they are not resent the next time.
+     */
+    final PendingStatusMessages savedState;
+    synchronized (pendingStatusMessagesLock)
+    {
+      savedState = pendingStatusMessages;
+      pendingStatusMessages = new PendingStatusMessages();
+    }
+    sendPendingChangeTimeHeartbeatMsgs(savedState);
+    sendPendingTopologyMsgs(savedState);
+    sendPendingMonitorMsgs(savedState);
+  }
+
+  private void sendPendingMonitorMsgs(final PendingStatusMessages pendingMsgs)
+  {
+    for (Entry<Integer, MonitorMsg> msg : pendingMsgs.pendingDSMonitorMsgs
+        .entrySet())
+    {
+      ServerHandler ds = directoryServers.get(msg.getKey());
+      if (ds != null)
+      {
+        try
+        {
+          ds.send(msg.getValue());
+        }
+        catch (IOException e)
+        {
+          // Ignore: connection closed.
+        }
+      }
+    }
+    for (Entry<Integer, MonitorMsg> msg : pendingMsgs.pendingRSMonitorMsgs
+        .entrySet())
+    {
+      ServerHandler rs = replicationServers.get(msg.getKey());
+      if (rs != null)
+      {
+        try
+        {
+          rs.send(msg.getValue());
+        }
+        catch (IOException e)
+        {
+          // We log the error. The requestor will detect a timeout or
+          // any other failure on the connection.
+
+          // FIXME: why do we log for RSs but not DSs?
+          logError(ERR_CHANGELOG_ERROR_SENDING_MSG.get(String.valueOf(msg
+              .getValue().getDestination())));
+        }
+      }
+    }
+  }
+
+  private void sendPendingChangeTimeHeartbeatMsgs(
+      PendingStatusMessages pendingMsgs)
+  {
+    for (ChangeTimeHeartbeatMsg pendingHeartbeat : pendingMsgs.pendingHeartbeats
+        .values())
+    {
+      for (ReplicationServerHandler rsHandler : replicationServers.values())
+      {
+        try
+        {
+          if (rsHandler.getProtocolVersion() >= REPLICATION_PROTOCOL_V3)
+          {
+            rsHandler.send(pendingHeartbeat);
+          }
+        }
+        catch (IOException e)
+        {
+          TRACER.debugCaught(DebugLogLevel.ERROR, e);
+          logError(ERR_CHANGELOG_ERROR_SENDING_MSG.get("Replication Server "
+              + replicationServer.getReplicationPort() + " " + baseDn + " "
+              + replicationServer.getServerId()));
+          stopServer(rsHandler, false);
+        }
+      }
+    }
+  }
+
+  private void sendPendingTopologyMsgs(PendingStatusMessages pendingMsgs)
+  {
+    if (pendingMsgs.sendDSTopologyMsg)
+    {
+      for (ServerHandler handler : directoryServers.values())
+      {
+        if (handler.getServerId() != pendingMsgs.excludedDSForTopologyMsg)
+        {
+          final TopologyMsg topoMsg =
+              createTopologyMsgForDS(handler.getServerId());
+          sendTopologyMsg("directory", handler, topoMsg);
+        }
+      }
+    }
+
+    if (pendingMsgs.sendRSTopologyMsg)
+    {
+      final TopologyMsg topoMsg = createTopologyMsgForRS();
+      for (ServerHandler handler : replicationServers.values())
+      {
+        sendTopologyMsg("replication", handler, topoMsg);
+      }
+    }
+  }
+
+  private void sendTopologyMsg(String type, ServerHandler handler,
+      TopologyMsg msg)
+  {
+    for (int i = 1; i <= 2; i++)
+    {
+      if (!handler.shuttingDown()
+          && handler.getStatus() != ServerStatus.NOT_CONNECTED_STATUS)
+      {
+        try
+        {
+          handler.sendTopoInfo(msg);
+          break;
+        }
+        catch (IOException e)
+        {
+          if (i == 2)
+          {
+            logError(ERR_EXCEPTION_SENDING_TOPO_INFO.get(baseDn, type, String
+                .valueOf(handler.getServerId()), e.getMessage()));
+          }
+        }
+      }
+      sleep(100);
+    }
+  }
+
+  /**
+   * Registers a DS handler into this domain and notifies the domain about the
+   * new DS.
+   *
+   * @param dsHandler
+   *          The Directory Server Handler to register
+   */
+  public void register(DataServerHandler dsHandler)
+  {
+    // connected with new DS: store handler.
+    directoryServers.put(dsHandler.getServerId(), dsHandler);
+
+    // Tell peer RSs and DSs a new DS just connected to us
+    // No need to re-send TopologyMsg to this just new DS
+    enqueueTopoInfoToAllExcept(dsHandler);
   }
 }

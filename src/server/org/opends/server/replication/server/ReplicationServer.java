@@ -1053,34 +1053,7 @@ public final class ReplicationServer
       }
     }
 
-    // Update threshold value for status analyzers (stop them if requested
-    // value is 0)
-    if (degradedStatusThreshold != configuration
-        .getDegradedStatusThreshold())
-    {
-      int oldThresholdValue = degradedStatusThreshold;
-      degradedStatusThreshold = configuration
-          .getDegradedStatusThreshold();
-      for (ReplicationServerDomain domain : getReplicationServerDomains())
-      {
-        if (degradedStatusThreshold == 0)
-        {
-          // Requested to stop analyzers
-          domain.stopStatusAnalyzer();
-        }
-        else if (domain.isRunningStatusAnalyzer())
-        {
-          // Update the threshold value for this running analyzer
-          domain.updateStatusAnalyzer(degradedStatusThreshold);
-        }
-        else if (oldThresholdValue == 0)
-        {
-          // Requested to start analyzers with provided threshold value
-          if (domain.getConnectedDSs().size() > 0)
-            domain.startStatusAnalyzer();
-        }
-      }
-    }
+    degradedStatusThreshold = configuration.getDegradedStatusThreshold();
 
     // Update period value for monitoring publishers (stop them if requested
     // value is 0)
@@ -1185,8 +1158,7 @@ public final class ReplicationServer
   {
     for (ReplicationServerDomain domain : getReplicationServerDomains())
     {
-      domain.buildAndSendTopoInfoToDSs(null);
-      domain.buildAndSendTopoInfoToRSs();
+      domain.sendTopoInfoToAll();
     }
   }
 
@@ -1239,7 +1211,6 @@ public final class ReplicationServer
 
   /**
    * Creates the backend associated to this replication server.
-   * @throws ConfigException
    */
   private void createBackend()
   throws ConfigException

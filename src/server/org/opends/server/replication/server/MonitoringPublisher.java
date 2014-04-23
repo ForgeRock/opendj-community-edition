@@ -98,11 +98,11 @@ public class MonitoringPublisher extends DirectoryThread
         MonitorData monitorData = replicationServerDomain
             .computeDomainMonitorData();
 
-        MonitorMsg monitorMsg = replicationServerDomain
-            .createGlobalTopologyMonitorMsg(0, 0, monitorData);
-
-        int localServerId = replicationServerDomain
-            .getReplicationServer().getServerId();
+        int localServerId =
+            replicationServerDomain.getReplicationServer().getServerId();
+        MonitorMsg monitorMsg =
+            replicationServerDomain.createGlobalTopologyMonitorMsg(
+                localServerId, 0, monitorData);
         for (ServerHandler serverHandler : replicationServerDomain
             .getConnectedDSs().values())
         {
@@ -111,10 +111,6 @@ public class MonitoringPublisher extends DirectoryThread
           {
             break;
           }
-
-          // Set the right sender and destination ids
-          monitorMsg.setSenderID(localServerId);
-          monitorMsg.setDestination(serverHandler.getServerId());
           try
           {
             serverHandler.send(monitorMsg);

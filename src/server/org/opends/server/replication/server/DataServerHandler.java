@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2013 ForgeRock AS
+ *      Portions copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
 
@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.zip.DataFormatException;
 
@@ -274,14 +273,6 @@ public class DataServerHandler extends ServerHandler
     return newStatus;
   }
 
-  private void createStatusAnalyzer()
-  {
-    if (!replicationServerDomain.isRunningStatusAnalyzer())
-    {
-      replicationServerDomain.startStatusAnalyzer();
-    }
-  }
-
   /**
    * Retrieves a set of attributes containing monitor data that should be
    * returned to the client if the corresponding monitor entry is requested.
@@ -432,25 +423,6 @@ public class DataServerHandler extends ServerHandler
     return serverStartMsg.getSSLEncryption();
   }
 
-  /**
-   * Registers this handler into its related domain and notifies the domain
-   * about the new DS.
-   */
-  public void registerIntoDomain()
-  {
-    // All-right, connected with new DS: store handler.
-    Map<Integer, DataServerHandler> connectedDSs =
-      replicationServerDomain.getConnectedDSs();
-    connectedDSs.put(serverId, this);
-
-    // Tell peer DSs a new DS just connected to us
-    // No need to re-send TopologyMsg to this just new DS so not null
-    // argument
-    replicationServerDomain.buildAndSendTopoInfoToDSs(this);
-    // Tell peer RSs a new DS just connected to us
-    replicationServerDomain.buildAndSendTopoInfoToRSs();
-  }
-
   // Send our own TopologyMsg to DS
   private TopologyMsg sendTopoToRemoteDS() throws IOException
   {
@@ -564,13 +536,10 @@ public class DataServerHandler extends ServerHandler
         throw new DirectoryException(ResultCode.OTHER, null, null);
       }
 
-      // Create the status analyzer for the domain if not already started
-      createStatusAnalyzer();
-
       // Create the monitoring publisher for the domain if not already started
       createMonitoringPublisher();
 
-      registerIntoDomain();
+      replicationServerDomain.register(this);
 
       Message message = INFO_REPLICATION_SERVER_CONNECTION_FROM_DS
           .get(getReplicationServerId(), getServerId(),
@@ -672,11 +641,6 @@ public class DataServerHandler extends ServerHandler
    * receiving a StopMsg to properly stop the handshake procedure.
    * @return the startSessionMsg received or null DS sent a stop message to
    *         not finish the handshake.
-   * @throws DirectoryException
-   * @throws IOException
-   * @throws ClassNotFoundException
-   * @throws DataFormatException
-   * @throws NotSupportedOldVersionPDUException
    */
   private StartSessionMsg waitAndProcessStartSessionFromRemoteDS()
   throws DirectoryException, IOException, ClassNotFoundException,

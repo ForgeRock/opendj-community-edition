@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
 
@@ -184,34 +184,25 @@ public class ServerReader extends DirectoryThread
             }
           } else if (msg instanceof WindowMsg)
           {
-            WindowMsg windowMsg = (WindowMsg) msg;
-            handler.updateWindow(windowMsg);
-          } else if (msg instanceof InitializeRequestMsg)
+            handler.updateWindow((WindowMsg) msg);
+          }
+          else if (msg instanceof MonitorRequestMsg)
           {
-            InitializeRequestMsg initializeMsg =
-              (InitializeRequestMsg) msg;
-            handler.process(initializeMsg);
-          } else if (msg instanceof InitializeRcvAckMsg)
+            handler.processMonitorRequestMsg((MonitorRequestMsg) msg);
+          }
+          else if (msg instanceof MonitorMsg)
           {
-            InitializeRcvAckMsg initializeRcvAckMsg =
-              (InitializeRcvAckMsg) msg;
-            handler.process(initializeRcvAckMsg);
-          } else if (msg instanceof InitializeTargetMsg)
+            handler.processMonitorMsg((MonitorMsg) msg);
+          }
+          else if (msg instanceof RoutableMsg)
           {
-            InitializeTargetMsg initializeMsg = (InitializeTargetMsg) msg;
-            handler.process(initializeMsg);
-          } else if (msg instanceof EntryMsg)
-          {
-            EntryMsg entryMsg = (EntryMsg) msg;
-            handler.process(entryMsg);
-          } else if (msg instanceof DoneMsg)
-          {
-            DoneMsg doneMsg = (DoneMsg) msg;
-            handler.process(doneMsg);
-          } else if (msg instanceof ErrorMsg)
-          {
-            ErrorMsg errorMsg = (ErrorMsg) msg;
-            handler.process(errorMsg);
+            /*
+             * Note that we handle monitor messages separately since they in
+             * fact never need "routing" and are instead sent directly between
+             * connected peers. Doing so allows us to more clearly decouple
+             * write IO from the reader thread (see OPENDJ-1354).
+             */
+            handler.process((RoutableMsg) msg);
           } else if (msg instanceof ResetGenerationIdMsg)
           {
             ResetGenerationIdMsg genIdMsg = (ResetGenerationIdMsg) msg;
@@ -242,15 +233,6 @@ public class ServerReader extends DirectoryThread
                     csMsg.toString());
               logError(errMessage);
             }
-          } else if (msg instanceof MonitorRequestMsg)
-          {
-            MonitorRequestMsg replServerMonitorRequestMsg =
-              (MonitorRequestMsg) msg;
-            handler.process(replServerMonitorRequestMsg);
-          } else if (msg instanceof MonitorMsg)
-          {
-            MonitorMsg replServerMonitorMsg = (MonitorMsg) msg;
-            handler.process(replServerMonitorMsg);
           } else if (msg instanceof ChangeTimeHeartbeatMsg)
           {
             ChangeTimeHeartbeatMsg cthbMsg = (ChangeTimeHeartbeatMsg) msg;
