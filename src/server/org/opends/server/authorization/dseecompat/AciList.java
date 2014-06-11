@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
+ *      Portions Copyright 2014 ForgeRock AS.
  */
 
 package org.opends.server.authorization.dseecompat;
@@ -368,11 +369,7 @@ public class AciList {
       {
         return false;
       }
-      if (hasAci && aciList.remove(entryDN) == null)
-      {
-        return false;
-      }
-      if (!hasGlobalAci && !hasAci)
+      if (hasAci || !hasGlobalAci)
       {
         return aciList.removeSubtree(entryDN, null);
       }
