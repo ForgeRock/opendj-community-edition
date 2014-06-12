@@ -1457,26 +1457,21 @@ Please:
   <!-- Prepare the Directory Server DSML library. -->
   <target name="predsml" depends="prepackage"
        description="Prepare the Directory Server DSML library.">
-    <taskdef name="xjc" classname="com.sun.tools.xjc.XJCTask">
-      <classpath>
-        <fileset dir="${dsml.lib.dir}">
-          <include name="**/*.jar" />
-        </fileset>
-      </classpath>
-    </taskdef>
-
+    <delete dir="${dsml.gen.dir}/org/opends/dsml/protocol" />
     <mkdir dir="${dsml.gen.dir}/org/opends/dsml/protocol" />
-    <xjc destdir="${dsml.gen.dir}" schema="${dsml.dir}/schema/DSMLv2.xsd"
-         removeOldOutput="yes" package="org.opends.dsml.protocol"
-         binding="${dsml.dir}/schema/bindings.xjb" target="2.1">
-      <!-- Don't generate package-info.java as it conflicts with
-           the one in src/dsml -->
-      <arg value="-npa"/>
-      <arg value="-verbose"/>
-      <produces dir="${dsml.gen.dir}/org/opends/dsml/protocol"
-           includes="* impl/*" />
-    </xjc>
-
+    <exec executable="xjc">
+        <arg value="-d"/>
+        <arg value="${dsml.gen.dir}"/>
+        <arg value="-p"/>
+        <arg value="org.opends.dsml.protocol"/>
+        <arg value="-b"/>
+        <arg value="${dsml.dir}/schema/bindings.xjb"/>
+        <arg value="-target"/>
+        <arg value="2.1"/>
+        <arg value="-npa"/>
+        <arg value="-verbose"/>
+        <arg value="${dsml.dir}/schema/DSMLv2.xsd"/>
+    </exec>
     <mkdir dir="${dsml.classes.dir}" />
 
     <javac srcdir="${dsml.gen.dir}" destdir="${dsml.classes.dir}">
@@ -1512,15 +1507,6 @@ Please:
            excludes="web.xml, **/*.jar, **/*.properties" />
 
       <classes dir="${dsml.classes.dir}" />
-
-      <lib dir="${dsml.lib.dir}">
-        <include name="jaxb-api.jar" />
-        <include name="jaxb-impl.jar" />
-        <include name="jsr173_1.0_api.jar" />
-        <include name="saaj-1.3.jar" />
-        <include name="saaj-impl-1.3.jar" />
-      </lib>
-
       <lib dir="${pdir}/lib">
         <include name="${SHORT_NAME}.jar" />
         <include name="${SHORT_NAME}_fr.jar" />
