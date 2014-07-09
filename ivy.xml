@@ -27,10 +27,10 @@
  ! -->
 <!-- Using entities prevent constantly declaring the same versions -->
 <!DOCTYPE ivy-module [
-    <!ENTITY grizzly.version    "2.3.4">
+    <!ENTITY grizzly.version    "2.3.14">
     <!-- Accept any 2.6.x version, even snapshots for continuous builds.
          Change this to a stable version when releasing OpenDJ 2.6.1. -->
-    <!ENTITY opendj.sdk.version "2.6.7">
+    <!ENTITY opendj.sdk.version "2.6.9-SNAPSHOT">
     <!ENTITY crest.version      "2.0.2">
 ]>
 <ivy-module version="2.0"
@@ -49,7 +49,7 @@
     <dependency org="javax.mail"            name="mail"                     rev="1.4.5" />
     <!-- subsequent versions are not compatible with java 6, so force to use this version only -->
     <dependency org="javax.servlet"         name="javax.servlet-api"        rev="[3.1-b02]" />
-    <dependency org="com.sleepycat"         name="je"                       rev="5.0.97" />
+    <dependency org="com.sleepycat"         name="je"                       rev="5.0.104" />
     <dependency org="org.forgerock.opendj"  name="opendj-rest2ldap-servlet" rev="&opendj.sdk.version;" />
     <dependency org="org.forgerock.opendj"  name="opendj-server2x-adapter"  rev="&opendj.sdk.version;">
       <!-- This is the OpenDJ server module :) -->
