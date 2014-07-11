@@ -27,7 +27,7 @@
  ! -->
 <!-- Using entities prevent constantly declaring the same versions -->
 <!DOCTYPE ivy-module [
-    <!ENTITY grizzly.version    "2.3.14">
+    <!ENTITY grizzly.version    "2.3.11">
     <!-- Accept any 2.6.x version, even snapshots for continuous builds.
          Change this to a stable version when releasing OpenDJ 2.6.1. -->
     <!ENTITY opendj.sdk.version "2.6.9-SNAPSHOT">
