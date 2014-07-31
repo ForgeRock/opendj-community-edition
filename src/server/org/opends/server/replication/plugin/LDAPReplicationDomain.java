@@ -4299,15 +4299,16 @@ private boolean solveNamingConflict(ModifyDNOperation op,
 
 
   /**
-   * Push the modifications contained in the given parameter as
-   * a modification that would happen on a local server.
-   * The modifications are not applied to the local database,
-   * historical information is not updated but a ChangeNumber
-   * is generated and the ServerState associated to this domain is
-   * updated.
-   * @param modifications The modification to push
+   * Push the schema modifications contained in the given parameter as a
+   * modification that would happen on a local server. The modifications are not
+   * applied to the local schema backend and historical information is not
+   * updated; but a CSN is generated and the ServerState associated to the
+   * schema domain is updated.
+   *
+   * @param modifications
+   *          The schema modifications to push
    */
-  public void synchronizeModifications(List<Modification> modifications)
+  public void synchronizeSchemaModifications(List<Modification> modifications)
   {
     ModifyOperation opBasis =
       new ModifyOperationBasis(InternalClientConnection.getRootConnection(),
@@ -4315,10 +4316,23 @@ private boolean solveNamingConflict(ModifyDNOperation op,
                           InternalClientConnection.nextMessageID(),
                           null, DirectoryServer.getSchemaDN(),
                           modifications);
-    LocalBackendModifyOperation op = new LocalBackendModifyOperation(opBasis);
 
+    final Entry schema;
+    try
+    {
+      schema = DirectoryServer.getEntry(DirectoryServer.getSchemaDN());
+    }
+    catch (DirectoryException e)
+    {
+      TRACER.debugCaught(DebugLogLevel.ERROR, e);
+      logError(ERR_BACKEND_SEARCH_ENTRY.get(DirectoryServer.getSchemaDN()
+              .toString(),stackTraceToSingleLineString(e)));
+      return;
+    }
+
+    LocalBackendModifyOperation op = new LocalBackendModifyOperation(opBasis);
     ChangeNumber cn = generateChangeNumber(op);
-    OperationContext ctx = new ModifyContext(cn, "schema");
+    OperationContext ctx = new ModifyContext(cn, getEntryUUID(schema));
     op.setAttachment(SYNCHROCONTEXT, ctx);
     op.setResultCode(ResultCode.SUCCESS);
     synchronize(op);
