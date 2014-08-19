@@ -4813,13 +4813,25 @@ private boolean solveNamingConflict(ModifyDNOperation op,
 
       if (lastRetrievedChange != null)
       {
+        if (debugEnabled())
+          TRACER.debugInfo("publish loop"
+            + " >=" + currentStartChangeNumber + " <=" + endChangeNumber
+            + " nentries=" + op.getEntriesSent()
+            + " result=" + op.getResultCode()
+            + " lastRetrievedChange=" + lastRetrievedChange);
         currentStartChangeNumber = lastRetrievedChange;
       }
       else
       {
+        if (debugEnabled())
+          TRACER.debugInfo("publish loop"
+            + " >=" + currentStartChangeNumber + " <=" + endChangeNumber
+            + " nentries=" + op.getEntriesSent()
+            + " result=" + op.getResultCode()
+            + " no changes");
         currentStartChangeNumber = endChangeNumber;
       }
-    } while (pendingChanges.recoveryUntil(lastRetrievedChange) &&
+    } while (pendingChanges.recoveryUntil(currentStartChangeNumber) &&
              (op.getResultCode().equals(ResultCode.SUCCESS)));
 
     return op.getResultCode().equals(ResultCode.SUCCESS);
