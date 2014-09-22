@@ -608,7 +608,8 @@ public final class LDAPReplicationDomain extends ReplicationDomain
     DirectoryServer.registerAlertGenerator(this);
 
     startPublishService(replicationServers, window, heartbeatInterval,
-        configuration.getChangetimeHeartbeatInterval());
+        configuration.getChangetimeHeartbeatInterval(),
+        configuration.getSourceAddress());
   }
 
   /**

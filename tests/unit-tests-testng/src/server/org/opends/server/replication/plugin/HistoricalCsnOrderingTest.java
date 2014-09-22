@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.plugin;
 
@@ -85,7 +85,7 @@ public class HistoricalCsnOrderingTest
 
     public TestBroker(LinkedList<ReplicationMsg> list)
     {
-      super(null, null, null, 0, 0, (long) 0, (long) 0, null, (byte) 0, (long) 0);
+      super(null, null, null, 0, 0, (long) 0, (long) 0, null, (byte) 0, (long) 0, null);
       this.list = list;
     }
 

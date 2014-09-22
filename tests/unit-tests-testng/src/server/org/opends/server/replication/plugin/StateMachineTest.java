@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2009-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.plugin;
 
@@ -327,7 +327,7 @@ public class StateMachineTest extends ReplicationTestCase
   {
     ReplicationBroker broker = new ReplicationBroker(null,
       state, EXAMPLE_DN, dsId, 100, generationId, 0,
-      new ReplSessionSecurity(null, null, null, true), (byte) 1, 500);
+      new ReplSessionSecurity(null, null, null, true), (byte) 1, 500, null);
     ArrayList<String> servers = new ArrayList<String>(1);
     servers.add("localhost:" + rs1Port);
     broker.start(servers);

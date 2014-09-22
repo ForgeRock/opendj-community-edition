@@ -39,13 +39,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.net.ConnectException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -117,6 +111,9 @@ public class ReplicationBroker
   private String rsServerUrl = null;
   /** Our replication domain. */
   private ReplicationDomain domain = null;
+  /** Bind to this address for outgoing connections. */
+  private InetAddress sourceAddress = null;
+
   /**
    * This object is used as a conditional event to be notified about
    * the reception of monitor information from the Replication Server.
@@ -224,12 +221,14 @@ public class ReplicationBroker
    * @param changeTimeHeartbeatInterval The interval (in ms) between Change
    *        time  heartbeats are sent to the RS,
    *        or zero if no CN heartbeat should be sent.
+   * @param sourceAddress The address to bind the socket to, or null if the OS
+   *        should choose the local address.
    */
   public ReplicationBroker(ReplicationDomain replicationDomain,
     ServerState state, String baseDn, int serverID2, int window,
     long generationId, long heartbeatInterval,
     ReplSessionSecurity replSessionSecurity, byte groupId,
-    long changeTimeHeartbeatInterval)
+    long changeTimeHeartbeatInterval, InetAddress sourceAddress)
   {
     this.domain = replicationDomain;
     this.baseDn = baseDn;
@@ -244,6 +243,7 @@ public class ReplicationBroker
     this.maxRcvWindow = window;
     this.halfRcvWindow = window / 2;
     this.changeTimeHeartbeatSendInterval = changeTimeHeartbeatInterval;
+    this.sourceAddress = sourceAddress;
 
     /*
      * Only create a monitor if there is a replication domain (this is not the
@@ -1243,6 +1243,11 @@ public class ReplicationBroker
       socket = new Socket();
       socket.setReceiveBufferSize(1000000);
       socket.setTcpNoDelay(true);
+      if (sourceAddress != null)
+      {
+        InetSocketAddress local = new InetSocketAddress(sourceAddress, 0);
+        socket.bind(local);
+      }
       int timeoutMS = MultimasterReplication.getConnectionTimeoutMS();
       socket.connect(serverAddr, timeoutMS);
       localSession = replSessionSecurity.createClientSession(socket, timeoutMS);

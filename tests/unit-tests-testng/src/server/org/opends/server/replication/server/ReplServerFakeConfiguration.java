@@ -23,9 +23,11 @@
  *
  *
  *      Copyright 2007-2009 Sun Microsystems, Inc.
+ *      Portions copyright 2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
 
+import java.net.InetAddress;
 import java.util.SortedSet;
 
 import org.opends.server.admin.Configuration;
@@ -190,6 +192,14 @@ public class ReplServerFakeConfiguration implements ReplicationServerCfg
   public int getReplicationServerId()
   {
     return serverId;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public InetAddress getSourceAddress()
+  {
+    return null;
   }
 
   /**

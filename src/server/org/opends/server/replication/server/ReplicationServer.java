@@ -104,6 +104,7 @@ public final class ReplicationServer
   private volatile boolean shutdown = false;
   private ReplicationDbEnv dbEnv;
   private int rcvWindow;
+  private InetAddress sourceAddress;
   private int queueSize;
   private String dbDirname = null;
 
@@ -217,6 +218,7 @@ public final class ReplicationServer
     purgeDelay = configuration.getReplicationPurgeDelay();
     dbDirname = configuration.getReplicationDBDirectory();
     rcvWindow = configuration.getWindowSize();
+    sourceAddress = configuration.getSourceAddress();
     if (dbDirname == null)
     {
       dbDirname = "changelogDb";
@@ -490,6 +492,11 @@ public final class ReplicationServer
       InetSocketAddress ServerAddr = new InetSocketAddress(
           InetAddress.getByName(hostname), Integer.parseInt(port));
       socket.setTcpNoDelay(true);
+      if (sourceAddress != null)
+      {
+        InetSocketAddress local = new InetSocketAddress(sourceAddress, 0);
+        socket.bind(local);
+      }
       int timeoutMS = MultimasterReplication.getConnectionTimeoutMS();
       socket.connect(ServerAddr, timeoutMS);
       session = replSessionSecurity.createClientSession(socket, timeoutMS);
@@ -1014,6 +1021,7 @@ public final class ReplicationServer
       }
     }
 
+    sourceAddress = configuration.getSourceAddress();
     rcvWindow = configuration.getWindowSize();
     assuredTimeout = configuration.getAssuredTimeout();
 

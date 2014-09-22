@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2013 ForgeRock AS
+ *      Portions copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.server;
 
@@ -490,7 +490,7 @@ public class AssuredReplicationServerTest
 
       List<String> replicationServers = new ArrayList<String>();
       replicationServers.add("localhost:" + rsPort);
-      fakeReplicationDomain.startPublishService(replicationServers, window, 1000, 500);
+      fakeReplicationDomain.startPublishService(replicationServers, window, 1000, 500, null);
       if (startListen)
         fakeReplicationDomain.startListenService();
 

@@ -23,10 +23,11 @@
  *
  *
  *      Copyright 2007-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011 ForgeRock AS
+ *      Portions copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.plugin;
 
+import java.net.InetAddress;
 import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -259,6 +260,14 @@ public class DomainFakeCfg implements ReplicationDomainCfg
   public SortedSet<String> getReplicationServer()
   {
     return replicationServers;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public InetAddress getSourceAddress()
+  {
+    return null;
   }
 
   /**

@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2009-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.plugin;
 
@@ -687,7 +687,7 @@ public class FractionalReplicationTest extends ReplicationTestCase {
     {
       super(serviceID, serverID, 100);
       generationID = generationId;
-      startPublishService(replicationServers, window, heartbeatInterval, 500);
+      startPublishService(replicationServers, window, heartbeatInterval, 500, null);
       startListenService();
     }
 

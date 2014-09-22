@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2013 ForgeRock AS
+ *      Portions Copyright 2013-2014 ForgeRock AS
  */
 package org.opends.server.replication.service;
 
@@ -63,7 +63,7 @@ public class FakeStressReplicationDomain extends ReplicationDomain
       BlockingQueue<UpdateMsg> queue) throws ConfigException
   {
     super(serviceID, serverID, 100);
-    startPublishService(replicationServers, window, heartbeatInterval, 500);
+    startPublishService(replicationServers, window, heartbeatInterval, 500, null);
     startListenService();
     this.queue = queue;
   }

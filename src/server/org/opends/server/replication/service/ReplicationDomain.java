@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication.service;
 
@@ -36,6 +36,7 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -2952,13 +2953,15 @@ public abstract class ReplicationDomain
    *                             servers.
    * @param changetimeHeartbeatInterval  The interval used to send change
    *                             time heartbeat to the replication server.
+   * @param sourceAddress        The address to bind the socket to, or null.
    *
    * @throws ConfigException     If the DirectoryServer configuration was
    *                             incorrect.
    */
   public void startPublishService(
       Collection<String> replicationServers, int window,
-      long heartbeatInterval, long changetimeHeartbeatInterval)
+      long heartbeatInterval, long changetimeHeartbeatInterval,
+      InetAddress sourceAddress)
   throws ConfigException
   {
     synchronized (sessionLock)
@@ -2975,7 +2978,8 @@ public abstract class ReplicationDomain
             heartbeatInterval,
             new ReplSessionSecurity(),
             getGroupId(),
-            changetimeHeartbeatInterval);
+            changetimeHeartbeatInterval,
+            sourceAddress);
 
         broker.start(replicationServers);
       }

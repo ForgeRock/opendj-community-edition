@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2014 ForgeRock AS
  */
 package org.opends.server.replication;
 
@@ -239,7 +239,7 @@ public abstract class ReplicationTestCase extends DirectoryServerTestCase
 
     ReplicationBroker broker = new ReplicationBroker(replicationDomain,
         state, baseDn.toNormalizedString(), serverId, window_size,
-        generationId, 100000, getReplSessionSecurity(), (byte)1, 500);
+        generationId, 100000, getReplSessionSecurity(), (byte)1, 500, null);
     ArrayList<String> servers = new ArrayList<String>(1);
     servers.add("localhost:" + port);
     broker.start(servers);
@@ -319,7 +319,7 @@ public abstract class ReplicationTestCase extends DirectoryServerTestCase
   {
     ReplicationBroker broker = new ReplicationBroker(null,
         state, baseDn.toNormalizedString(), serverId, window_size, generationId,
-        100000, getReplSessionSecurity(), (byte)1, 500);
+        100000, getReplSessionSecurity(), (byte)1, 500, null);
     ArrayList<String> servers = new ArrayList<String>(1);
     servers.add("localhost:" + port);
     broker.start(servers);
@@ -348,7 +348,7 @@ public abstract class ReplicationTestCase extends DirectoryServerTestCase
 
     ReplicationBroker broker = new ReplicationBroker(null,
         state, baseDn.toNormalizedString(), serverId, window_size,
-        getGenerationId(baseDn), 0, getReplSessionSecurity(), (byte)1, 500);
+        getGenerationId(baseDn), 0, getReplSessionSecurity(), (byte)1, 500, null);
     ArrayList<String> servers = new ArrayList<String>(1);
     servers.add("localhost:" + port);
     broker.start(servers);

@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2011-2013 ForgeRock AS.
+ *      Copyright 2011-2014 ForgeRock AS.
  */
 package org.opends.server.extensions;
 
@@ -1340,7 +1340,11 @@ public final class LDAPPassThroughAuthenticationPolicyFactory implements
           plainSocket.setTcpNoDelay(cfg.isUseTCPNoDelay());
           plainSocket.setKeepAlive(cfg.isUseTCPKeepAlive());
           plainSocket.setSoTimeout(timeoutMS);
-
+          if (cfg.getSourceAddress() != null)
+          {
+            InetSocketAddress local = new InetSocketAddress(cfg.getSourceAddress(), 0);
+            plainSocket.bind(local);
+          }
           // Connect the ldapSocket.
           plainSocket.connect(socketAddress, timeoutMS);
 
