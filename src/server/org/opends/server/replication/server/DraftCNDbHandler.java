@@ -424,7 +424,7 @@ public class DraftCNDbHandler implements Runnable
               TRACER.debugInfo("DraftCNDBHandler:clear() - ChangeVector:"+
                       cnVector.toString()+
                       " -- StartState:"+startState.toString());
-            cnVector.update(cn);
+            // cnVector.update(cn);
           }
           catch(Exception e)
           {
@@ -434,7 +434,9 @@ public class DraftCNDbHandler implements Runnable
             continue;
           }
 
-          if (!cnVector.cover(startState))
+          if ((cnVector == null)
+                  || ((cnVector.getMaxChangeNumber(cn.getServerId()) != null)
+                      && !cnVector.cover(startState)))
           {
             cursor.delete();
             if (debugEnabled())
