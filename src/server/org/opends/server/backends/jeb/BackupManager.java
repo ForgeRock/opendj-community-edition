@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
+ *      Portions Copyright 2014 ForgeRock, AS
  */
 package org.opends.server.backends.jeb;
 import org.opends.messages.Message;
@@ -1405,7 +1406,7 @@ public class BackupManager
     if (backupInfo == null)
     {
       Message message =
-          ERR_JEB_BACKUP_MISSING_BACKUPID.get(backupDir.getPath(), backupID);
+          ERR_JEB_BACKUP_MISSING_BACKUPID.get(backupID, backupDir.getPath());
       throw new DirectoryException(DirectoryServer.getServerErrorResultCode(),
                                    message);
     }
