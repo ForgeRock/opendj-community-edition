@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
+ *      Portions copyright 2014 ForgeRock AS.
  */
 package org.opends.server.backends.jeb;
 
@@ -216,8 +217,13 @@ public class IndexBuffer
 
     if(bufferedValues != null)
     {
+      /*
+       * OPENDJ-1375: add keys in reverse order to be consistent with single
+       * entry processing in add/delete processing. This is necessary in order
+       * to avoid deadlocks.
+       */
       Iterator<Map.Entry<byte[], BufferedIndexValues>> keyIterator =
-          bufferedValues.entrySet().iterator();
+          bufferedValues.descendingMap().entrySet().iterator();
       while(keyIterator.hasNext())
       {
         Map.Entry<byte[], BufferedIndexValues> bufferedKey =
