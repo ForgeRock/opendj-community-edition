@@ -23,12 +23,14 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
+ *      Portions Copyright 2015 ForgeRock, AS
  */
 package org.opends.server.backends;
 
 
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 import org.opends.messages.Message;
@@ -93,9 +95,61 @@ public class BackupBackend
   // The set of supported features for this backend.
   private HashSet<String> supportedFeatures;
 
-  // The set of predefined backup directories that we will use.
-  private LinkedHashSet<File> backupDirectories;
+  /** A cache of BackupDirectories. */
+  private HashMap<File,CachedBackupDirectory> backupDirectories;
 
+  /**
+   * To avoid parsing and reparsing the contents of backup.info files, we
+   * cache the BackupDirectory for each directory using this class.
+   */
+  private class CachedBackupDirectory
+  {
+    /** The path to the 'bak' directory. */
+    private final String directoryPath;
+
+    /** The 'backup.info' file. */
+    private final File backupInfo;
+
+    /** The last modify time of the backupInfo file */
+    private long lastModified;
+
+    /** The BackupDirectory parsed at lastModified time. */
+    private BackupDirectory backupDirectory;
+
+    /**
+     * A BackupDirectory that is cached based on the backup descriptor file.
+     *
+     * @param directory Path to the backup directory itself.
+     */
+    public CachedBackupDirectory(File directory)
+    {
+      directoryPath = directory.getPath();
+      backupInfo = new File(directoryPath + File.separator + BACKUP_DIRECTORY_DESCRIPTOR_FILE);
+      lastModified = -1;
+      backupDirectory = null;
+    }
+
+    /**
+     * Return a BackupDirectory. This will be recomputed every time the underlying descriptor (backup.info) file
+     * changes.
+     *
+     * @return An up-to-date BackupDirectory
+     * @throws IOException If a problem occurs while trying to read the contents of the descriptor file.
+     * @throws ConfigException If the contents of the descriptor file cannot be parsed to create a backup directory
+     *                         structure.
+     */
+    public synchronized BackupDirectory getBackupDirectory()
+            throws IOException, ConfigException
+    {
+      long currentModified = backupInfo.lastModified();
+      if (backupDirectory == null || currentModified != lastModified)
+      {
+        backupDirectory = BackupDirectory.readBackupDirectoryDescriptor(directoryPath);
+        lastModified = currentModified;
+      }
+      return backupDirectory;
+    }
+  }
 
 
   /**
@@ -165,10 +219,11 @@ public class BackupBackend
 
     // Determine the set of backup directories that we will use by default.
     Set<String> values = currentConfig.getBackupDirectory();
-    backupDirectories = new LinkedHashSet<File>(values.size());
+    backupDirectories = new LinkedHashMap<File,CachedBackupDirectory>(values.size());
     for (String s : values)
     {
-      backupDirectories.add(getFileForPath(s));
+      File dir = getFileForPath(s);
+      backupDirectories.put(dir, new CachedBackupDirectory(dir));
     }
 
 
@@ -276,23 +331,24 @@ public class BackupBackend
     AttributeType backupPathType =
          DirectoryServer.getAttributeType(ATTR_BACKUP_DIRECTORY_PATH, true);
 
-    for (File f : backupDirectories)
+    for (File dir : backupDirectories.keySet())
     {
       try
       {
         // Check to see if the descriptor file exists.  If not, then skip this
         // backup directory.
-        File descriptorFile = new File(f, BACKUP_DIRECTORY_DESCRIPTOR_FILE);
+        File descriptorFile = new File(dir, BACKUP_DIRECTORY_DESCRIPTOR_FILE);
         if (! descriptorFile.exists())
         {
           continue;
         }
 
         DN backupDirDN = makeChildDN(backupBaseDN, backupPathType,
-                                     f.getAbsolutePath());
+                                     dir.getAbsolutePath());
         getBackupDirectoryEntry(backupDirDN);
         numEntries++;
-      } catch (Exception e) {}
+      }
+      catch (Exception e) {}
     }
 
     return numEntries;
@@ -365,11 +421,11 @@ public class BackupBackend
     if (backupBaseDN.equals(entryDN))
     {
       long count = 0;
-      for (File f : backupDirectories)
+      for (File dir : backupDirectories.keySet())
       {
         // Check to see if the descriptor file exists.  If not, then skip this
         // backup directory.
-        File descriptorFile = new File(f, BACKUP_DIRECTORY_DESCRIPTOR_FILE);
+        File descriptorFile = new File(dir, BACKUP_DIRECTORY_DESCRIPTOR_FILE);
         if (! descriptorFile.exists())
         {
           continue;
@@ -381,8 +437,7 @@ public class BackupBackend
         {
           try
           {
-            BackupDirectory backupDirectory =
-                BackupDirectory.readBackupDirectoryDescriptor(f.getPath());
+            BackupDirectory backupDirectory = backupDirectories.get(dir).getBackupDirectory();
             count += backupDirectory.getBackups().keySet().size();
           }
           catch (Exception e)
@@ -419,9 +474,8 @@ public class BackupBackend
         {
           try
           {
-            BackupDirectory backupDirectory =
-                BackupDirectory.readBackupDirectoryDescriptor(
-                    v.getValue().toString());
+            File dir = new File(v.toString());
+            BackupDirectory backupDirectory = backupDirectories.get(dir).getBackupDirectory();
             count += backupDirectory.getBackups().keySet().size();
           }
           catch (Exception e)
@@ -529,9 +583,8 @@ public class BackupBackend
     BackupDirectory backupDirectory;
     try
     {
-      backupDirectory =
-           BackupDirectory.readBackupDirectoryDescriptor(
-               v.getValue().toString());
+      File dir = new File(v.toString());
+      backupDirectory = backupDirectories.get(dir).getBackupDirectory();
     }
     catch (ConfigException ce)
     {
@@ -851,11 +904,11 @@ public class BackupBackend
       {
         AttributeType backupPathType =
              DirectoryServer.getAttributeType(ATTR_BACKUP_DIRECTORY_PATH, true);
-        for (File f : backupDirectories)
+        for (File dir : backupDirectories.keySet())
         {
           // Check to see if the descriptor file exists.  If not, then skip this
           // backup directory.
-          File descriptorFile = new File(f, BACKUP_DIRECTORY_DESCRIPTOR_FILE);
+          File descriptorFile = new File(dir, BACKUP_DIRECTORY_DESCRIPTOR_FILE);
           if (! descriptorFile.exists())
           {
             continue;
@@ -863,7 +916,7 @@ public class BackupBackend
 
 
           DN backupDirDN = makeChildDN(backupBaseDN, backupPathType,
-                                       f.getAbsolutePath());
+                                       dir.getAbsolutePath());
 
           Entry backupDirEntry;
           try
@@ -895,9 +948,8 @@ public class BackupBackend
               {
                 try
                 {
-                  BackupDirectory backupDirectory =
-                       BackupDirectory.readBackupDirectoryDescriptor(
-                            v.getValue().toString());
+                  File subtreeDir = new File(v.toString());
+                  BackupDirectory backupDirectory = backupDirectories.get(subtreeDir).getBackupDirectory();
                   AttributeType idType =
                        DirectoryServer.getAttributeType(ATTR_BACKUP_ID,
                                                         true);
@@ -952,9 +1004,8 @@ public class BackupBackend
           {
             try
             {
-              BackupDirectory backupDirectory =
-                   BackupDirectory.readBackupDirectoryDescriptor(
-                        v.getValue().toString());
+              File dir = new File(v.toString());
+              BackupDirectory backupDirectory = backupDirectories.get(dir).getBackupDirectory();
               AttributeType idType =
                    DirectoryServer.getAttributeType(ATTR_BACKUP_ID,
                                                     true);
@@ -1192,10 +1243,11 @@ public class BackupBackend
 
 
     Set<String> values = cfg.getBackupDirectory();
-    backupDirectories = new LinkedHashSet<File>(values.size());
+    backupDirectories = new LinkedHashMap<File,CachedBackupDirectory>(values.size());
     for (String s : values)
     {
-      backupDirectories.add(getFileForPath(s));
+      File dir = getFileForPath(s);
+      backupDirectories.put(dir, new CachedBackupDirectory(dir));
     }
 
     currentConfig = cfg;
