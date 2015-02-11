@@ -687,8 +687,8 @@ public class BackupBackend
 
     BackupDirectory backupDirectory;
     try {
-      backupDirectory = BackupDirectory.readBackupDirectoryDescriptor(v
-          .getValue().toString());
+      backupDirectory = backupDirectories.get(new File(v.getValue().toString()))
+          .getBackupDirectory();
     } catch (ConfigException ce) {
       if (debugEnabled()) {
         TRACER.debugCaught(DebugLogLevel.ERROR, ce);
