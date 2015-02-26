@@ -23,14 +23,14 @@
  ! CDDL HEADER END
  !
  !
- !      Copyright 2013-2014 ForgeRock AS
+ !      Copyright 2013-2015 ForgeRock AS
  ! -->
 <!-- Using entities prevent constantly declaring the same versions -->
 <!DOCTYPE ivy-module [
     <!ENTITY grizzly.version    "2.3.11">
     <!-- Accept any 2.6.x version, even snapshots for continuous builds.
          Change this to a stable version when releasing OpenDJ 2.6.1. -->
-    <!ENTITY opendj.sdk.version "2.6.9">
+    <!ENTITY opendj.sdk.version "2.6.10-SNAPSHOT">
     <!ENTITY crest.version      "2.0.2">
 ]>
 <ivy-module version="2.0"
@@ -72,7 +72,7 @@
     <dependency org="org.glassfish.grizzly" name="grizzly-http"             rev="&grizzly.version;"    conf="default->master,sources"/>
     <dependency org="org.glassfish.grizzly" name="grizzly-http-server"      rev="&grizzly.version;"    conf="default->master,sources"/>
     <dependency org="org.glassfish.grizzly" name="grizzly-rcm"              rev="&grizzly.version;"    conf="default->master,sources"/>
-    <dependency org="org.forgerock.commons" name="i18n-core"                rev="1.4.0"                conf="default->master,sources"/>
+    <dependency org="org.forgerock.commons" name="i18n-core"                rev="1.4.1"                conf="default->master,sources"/>
     <dependency org="org.forgerock.commons" name="json-fluent"              rev="&crest.version;"      conf="default->master,sources"/>
     <dependency org="org.forgerock.commons" name="json-resource"            rev="&crest.version;"      conf="default->master,sources"/>
     <dependency org="org.forgerock.commons" name="json-resource-servlet"    rev="&crest.version;"      conf="default->master,sources"/>
