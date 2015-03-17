@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.extensions;
 
@@ -784,6 +784,21 @@ public class PasswordModifyExtendedOperation
                   ERR_EXTOP_PASSMOD_CANNOT_GENERATE_PW.get(
                           de.getMessageObject()));
           return;
+        }
+        // Prepare to update the password history, if necessary.
+        if (pwPolicyState.maintainHistory())
+        {
+          if (pwPolicyState.isPasswordInHistory(newPassword))
+          {
+            operation.setResultCode(ResultCode.CONSTRAINT_VIOLATION);
+            operation.appendErrorMessage(
+                    ERR_EXTOP_PASSMOD_PW_IN_HISTORY.get());
+            return;
+          }
+          else
+          {
+            pwPolicyState.updatePasswordHistory();
+          }
         }
       }
       else
