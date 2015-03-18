@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2007-2008 Sun Microsystems, Inc.
- *      Portions Copyright 2011 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.backends;
 
@@ -307,21 +307,56 @@ public class LDIFBackend
       }
     }
 
+    // On Linux the final write() on a file can actually fail but not throw an
+    // Exception. The close() will throw an Exception in this case so we MUST
+    // check for Exceptions here.
     try
     {
       writer.close();
-    } catch (Exception e) {}
-
-
-    // Rename the existing "live" file out of the way and move the new file
-    // into place.
-    try
+    }
+    catch (Exception e)
     {
-      if (oldFile.exists())
+      if (debugEnabled())
+      {
+        TRACER.debugCaught(DebugLogLevel.ERROR, e);
+      }
+      Message m = ERR_LDIF_BACKEND_ERROR_CLOSING_FILE.get(
+                       tempFile.getAbsolutePath(),
+                       currentConfig.dn().toString(),
+                       stackTraceToSingleLineString(e));
+      DirectoryServer.sendAlertNotification(this,
+                           ALERT_TYPE_LDIF_BACKEND_CANNOT_WRITE_UPDATE, m);
+      throw new DirectoryException(DirectoryServer.getServerErrorResultCode(),
+                                   m, e);
+    }
+
+    // Extra sanity check
+    if (!entryMap.isEmpty() && tempFile.exists() && tempFile.length() == 0)
+    {
+      Message m = ERR_LDIF_BACKEND_ERROR_EMPTY_FILE.get(
+                       tempFile.getAbsolutePath(),
+                       currentConfig.dn().toString());
+      DirectoryServer.sendAlertNotification(this,
+                           ALERT_TYPE_LDIF_BACKEND_CANNOT_WRITE_UPDATE, m);
+      throw new DirectoryException(DirectoryServer.getServerErrorResultCode(), m);
+    }
+
+    if (tempFile.exists())
+    {
+      // Rename the existing "live" file out of the way and move the new file
+      // into place.
+      try
       {
         oldFile.delete();
       }
-    } catch (Exception e) {}
+      catch (Exception e)
+      {
+        if (debugEnabled())
+        {
+          TRACER.debugCaught(DebugLogLevel.ERROR, e);
+        }
+      }
+    }
 
     try
     {
