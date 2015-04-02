@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.dsml.protocol;
 
@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URL;
 import java.text.ParseException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -50,12 +51,15 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
+import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
@@ -63,6 +67,8 @@ import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
 import javax.xml.soap.*;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
@@ -90,8 +96,9 @@ import org.opends.server.util.Base64;
 
 import org.w3c.dom.Document;
 import org.xml.sax.Attributes;
+import org.xml.sax.SAXNotRecognizedException;
+import org.xml.sax.SAXNotSupportedException;
 import org.xml.sax.helpers.DefaultHandler;
-import org.xml.sax.helpers.XMLReaderFactory;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
@@ -138,9 +145,11 @@ public class DSMLServlet extends HttpServlet {
   private static Schema schema;
 
   // this extends the default handler of SAX parser. It helps to retrieve the
-  // requestID value when the xml request is malformed and thus unparsable
+  // requestID value when the xml request is malformed and thus unparseable
   // using SOAP or JAXB.
   private DSMLContentHandler contentHandler;
+  /** Prevent multiple logging when trying to set unavailable/unsupported parser features */
+  private static AtomicBoolean featureWarnings = new AtomicBoolean(false);
 
   private String hostName;
   private Integer port;
@@ -230,6 +239,8 @@ public class DSMLServlet extends HttpServlet {
       messageFactory = MessageFactory.newInstance();
       DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
       dbf.setNamespaceAware(true);
+      dbf.setXIncludeAware(false);
+      dbf.setExpandEntityReferences(false);
       db = dbf.newDocumentBuilder();
 
       this.contentHandler = new DSMLContentHandler();
@@ -577,6 +588,37 @@ public class DSMLServlet extends HttpServlet {
   }
 
   /**
+   * Safely set feature on an XMLReader instance.
+   *
+   * @param xmlReader The reader to configure.
+   * @param feature The feature string to set.
+   * @param flag The value to set the feature to.
+   */
+  private void safeSetFeature(XMLReader xmlReader, String feature, Boolean flag)
+  {
+    try
+    {
+      xmlReader.setFeature(feature, flag);
+    }
+    catch (SAXNotSupportedException e)
+    {
+      if (featureWarnings.compareAndSet(false, true))
+      {
+        Logger.getLogger(PKG_NAME).log(Level.SEVERE, "XMLReader unsupported feature " + feature);
+      }
+    }
+    catch (SAXNotRecognizedException e)
+    {
+      if (featureWarnings.compareAndSet(false, true))
+      {
+        Logger.getLogger(PKG_NAME).log(Level.SEVERE, "XMLReader unrecognized feature " + feature);
+      }
+    }
+  }
+
+
+
+  /**
    * Returns an error response after a parsing error. The response has the
    * requestID of the batch request, the error response message of the parsing
    * exception message and the type 'malformed request'.
@@ -595,15 +637,39 @@ public class DSMLServlet extends HttpServlet {
 
     try {
       // try alternative XML parsing using SAX to retrieve requestID value
-      XMLReader xmlReader = XMLReaderFactory.createXMLReader();
+
+      SAXParserFactory saxParserFactory = SAXParserFactory.newInstance();
+      // Ensure we are doing basic secure processing.
+      saxParserFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+      saxParserFactory.setXIncludeAware(false);
+      saxParserFactory.setNamespaceAware(true);
+
+      // Configure a safe XMLReader appropriate for SOAP.
+      XMLReader xmlReader = saxParserFactory.newSAXParser().getXMLReader();
+      safeSetFeature(xmlReader, "http://xml.org/sax/features/validation", false);
+      safeSetFeature(xmlReader, "http://xml.org/sax/features/external-general-entities", false);
+      safeSetFeature(xmlReader, "http://xml.org/sax/features/external-parameter-entities", false);
+      safeSetFeature(xmlReader, "http://xml.org/sax/features/namespaces", true);
+      safeSetFeature(xmlReader, "http://apache.org/xml/features/disallow-doctype-decl", true);
+
       // clear previous match
       this.contentHandler.requestID = null;
       xmlReader.setContentHandler(this.contentHandler);
       is.reset();
 
       xmlReader.parse(new InputSource(is));
-    } catch (Throwable e) {
-      // document is unparsable so will jump here
+    }
+    catch (ParserConfigurationException e)
+    {
+      // ignore
+    }
+    catch (SAXException e)
+    {
+      // ignore
+    }
+    catch (IOException e)
+    {
+      // ignore
     }
     if ( parserErrorMessage!= null ) {
       errorResponse.setMessage(parserErrorMessage);
@@ -801,9 +867,9 @@ public class DSMLServlet extends HttpServlet {
     return nextID;
   }
 
-    /**
-   * This class is used when a xml request is malformed to retrieve the
-   * requestID value using an event xml parser.
+  /**
+   * This class is used when an XML request is malformed to retrieve the
+   * requestID value using an event XML parser.
    */
   private static class DSMLContentHandler extends DefaultHandler {
     private String requestID;
