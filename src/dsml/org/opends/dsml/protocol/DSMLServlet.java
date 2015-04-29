@@ -141,14 +141,8 @@ public class DSMLServlet extends HttpServlet {
   private static final String ON_ERROR_EXIT = "exit";
 
   private static JAXBContext jaxbContext;
-  private ObjectFactory objFactory;
-  private MessageFactory messageFactory;
   private static Schema schema;
 
-  // this extends the default handler of SAX parser. It helps to retrieve the
-  // requestID value when the xml request is malformed and thus unparseable
-  // using SOAP or JAXB.
-  private DSMLContentHandler contentHandler;
   /** Prevent multiple logging when trying to set unavailable/unsupported parser features */
   private static AtomicBoolean logFeatureWarnings = new AtomicBoolean(false);
 
@@ -163,7 +157,6 @@ public class DSMLServlet extends HttpServlet {
   private Boolean trustAll;
   private Boolean useHTTPAuthzID;
   private HashSet<String> exopStrings = new HashSet<String>();
-  private org.opends.server.types.Control proxyAuthzControl = null;
 
   /**
    * This method will be called by the Servlet Container when
@@ -235,11 +228,6 @@ public class DSMLServlet extends HttpServlet {
           schema = sf.newSchema(url);
         }
       }
-
-      objFactory = new ObjectFactory();
-      messageFactory = MessageFactory.newInstance();
-
-      this.contentHandler = new DSMLContentHandler();
 
       DirectoryServer.bootstrapClient();
     } catch (Exception je) {
@@ -352,9 +340,22 @@ public class DSMLServlet extends HttpServlet {
 
     // Create response in the beginning as it might be used if the parsing
     // failes.
+    ObjectFactory objFactory = new ObjectFactory();
     BatchResponse batchResponse = objFactory.createBatchResponse();
     List<JAXBElement<?>> batchResponses = batchResponse.getBatchResponses();
+
+    // This is only used for building the response
     Document doc = createSafeDocument();
+
+    MessageFactory messageFactory;
+    try
+    {
+      messageFactory = MessageFactory.newInstance();
+    }
+    catch (SOAPException e)
+    {
+      throw new ServletException(e.getMessage());
+    }
 
     if (useSSL || useStartTLS)
     {
@@ -367,7 +368,7 @@ public class DSMLServlet extends HttpServlet {
       catch(SSLConnectionException e)
       {
         batchResponses.add(
-          createErrorResponse(
+          createErrorResponse(objFactory,
             new LDAPException(LDAPResultCode.CLIENT_SIDE_CONNECT_ERROR,
               Message.raw(
               "Invalid SSL or TLS configuration to connect to LDAP server."))));
@@ -410,7 +411,7 @@ public class DSMLServlet extends HttpServlet {
           } catch (ParseException ex) {
             // user/DN:password parsing error
             batchResponses.add(
-              createErrorResponse(
+              createErrorResponse(objFactory,
                     new LDAPException(LDAPResultCode.INVALID_CREDENTIALS,
                     Message.raw(ex.getMessage()))));
             break;
@@ -435,7 +436,7 @@ public class DSMLServlet extends HttpServlet {
         else
         {
           batchResponses.add(
-              createErrorResponse(
+              createErrorResponse(objFactory,
                     new LDAPException(LDAPResultCode.INVALID_CREDENTIALS,
                     Message.raw("Invalid configured credentials."))));
         }
@@ -450,7 +451,7 @@ public class DSMLServlet extends HttpServlet {
       if (((!authenticationIsID && (bindDN == null)) || bindPassword == null)
          && batchResponses.isEmpty()) {
         batchResponses.add(
-              createErrorResponse(
+              createErrorResponse(objFactory,
                     new LDAPException(LDAPResultCode.INVALID_CREDENTIALS,
                     Message.raw("Unable to retrieve credentials."))));
       }
@@ -465,6 +466,7 @@ public class DSMLServlet extends HttpServlet {
         // SOAP was unable to parse XML successfully
         batchResponses.add(
           createXMLParsingErrorResponse(is,
+                                        objFactory,
                                         batchResponse,
                                         String.valueOf(ex.getCause())));
       }
@@ -489,6 +491,7 @@ public class DSMLServlet extends HttpServlet {
         } catch (JAXBException e) {
           // schema validation failed
           batchResponses.add(createXMLParsingErrorResponse(is,
+                                                       objFactory,
                                                        batchResponse,
                                                        String.valueOf(e)));
         }
@@ -514,6 +517,7 @@ public class DSMLServlet extends HttpServlet {
           }
           // set requestID in response
           batchResponse.setRequestID(batchRequest.getRequestID());
+          org.opends.server.types.Control proxyAuthzControl = null;
 
           boolean connected = false;
 
@@ -539,14 +543,17 @@ public class DSMLServlet extends HttpServlet {
               connected = true;
             } catch (LDAPConnectionException e) {
               // if connection failed, return appropriate error response
-              batchResponses.add(createErrorResponse(e));
+              batchResponses.add(createErrorResponse(objFactory, e));
             }
           }
           if ( connected ) {
             List<DsmlMessage> list = batchRequest.getBatchRequests();
 
             for (DsmlMessage request : list) {
-              JAXBElement<?> result = performLDAPRequest(connection, request);
+              JAXBElement<?> result = performLDAPRequest(connection,
+                                                         objFactory,
+                                                         proxyAuthzControl,
+                                                         request);
               if ( result != null ) {
                 batchResponses.add(result);
               }
@@ -579,7 +586,7 @@ public class DSMLServlet extends HttpServlet {
     try {
       Marshaller marshaller = jaxbContext.createMarshaller();
       marshaller.marshal(objFactory.createBatchResponse(batchResponse), doc);
-      sendResponse(doc, res);
+      sendResponse(doc, messageFactory, res);
     } catch (Exception e) {
       e.printStackTrace();
     }
@@ -623,6 +630,7 @@ public class DSMLServlet extends HttpServlet {
    * exception message and the type 'malformed request'.
    *
    * @param is the xml InputStream to parse
+   * @param objFactory the object factory
    * @param batchResponse the JAXB object to fill in
    * @param parserErrorMessage the parsing error message
    *
@@ -630,17 +638,16 @@ public class DSMLServlet extends HttpServlet {
    */
   private JAXBElement<ErrorResponse> createXMLParsingErrorResponse(
                                                     InputStream is,
+                                                    ObjectFactory objFactory,
                                                     BatchResponse batchResponse,
                                                     String parserErrorMessage) {
     ErrorResponse errorResponse = objFactory.createErrorResponse();
+    DSMLContentHandler contentHandler = new DSMLContentHandler();
 
     try {
       // try alternative XML parsing using SAX to retrieve requestID value
       final XMLReader xmlReader = createSafeXMLReader();
-
-      // clear previous match
-      this.contentHandler.requestID = null;
-      xmlReader.setContentHandler(this.contentHandler);
+      xmlReader.setContentHandler(contentHandler);
       is.reset();
 
       xmlReader.parse(new InputSource(is));
@@ -660,7 +667,7 @@ public class DSMLServlet extends HttpServlet {
     if ( parserErrorMessage!= null ) {
       errorResponse.setMessage(parserErrorMessage);
     }
-    batchResponse.setRequestID(this.contentHandler.requestID);
+    batchResponse.setRequestID(contentHandler.requestID);
 
     errorResponse.setType(MALFORMED_REQUEST);
 
@@ -671,11 +678,13 @@ public class DSMLServlet extends HttpServlet {
    * Returns an error response with attributes set according to the exception
    * provided as argument.
    *
-   * @param t the exception that occured
+   * @param objFactory the object factory
+   * @param t the exception that occurred
    *
    * @return a JAXBElement that contains an ErrorResponse
    */
-  private JAXBElement<ErrorResponse> createErrorResponse(Throwable t) {
+  private JAXBElement<ErrorResponse> createErrorResponse(ObjectFactory objFactory,
+                                                         Throwable t) {
     // potential exceptions are IOException, LDAPException, ASN1Exception
 
     ErrorResponse errorResponse = objFactory.createErrorResponse();
@@ -718,12 +727,16 @@ public class DSMLServlet extends HttpServlet {
    * of error, an error response is returned.
    *
    * @param connection a connected connection
+   * @param objFactory the object factory
+   * @param proxyAuthzControl a proxy authz control, or null
    * @param request the JAXB request to perform
    *
    * @return null for an abandon request, the expect result for all other
    *         requests or an error in case of unexpected behaviour.
    */
   private JAXBElement<?> performLDAPRequest(LDAPConnection connection,
+                                            ObjectFactory objFactory,
+                                            org.opends.server.types.Control proxyAuthzControl,
                                             DsmlMessage request) {
     ArrayList<org.opends.server.types.Control> controls =
         new ArrayList<org.opends.server.types.Control>(1);
@@ -800,7 +813,7 @@ public class DSMLServlet extends HttpServlet {
         return objFactory.createBatchResponseAuthResponse(ldapResult);
       }
     } catch (Throwable t) {
-      return createErrorResponse(t);
+      return createErrorResponse(objFactory, t);
     }
     // should never happen as the schema was validated
     return null;
@@ -812,12 +825,13 @@ public class DSMLServlet extends HttpServlet {
    * or a correct DSML response.
    *
    * @param doc   The document to include in the response.
+   * @param messageFactory  The SOAP message factory.
    * @param res   Information about the HTTP response to the client.
    *
    * @throws IOException   If an error occurs while interacting with the client.
    * @throws SOAPException If an encoding or decoding error occurs.
    */
-  private void sendResponse(Document doc, HttpServletResponse res)
+  private void sendResponse(Document doc, MessageFactory messageFactory, HttpServletResponse res)
     throws IOException, SOAPException {
 
     SOAPMessage reply = messageFactory.createMessage();
@@ -947,7 +961,7 @@ public class DSMLServlet extends HttpServlet {
    * This class is used when an XML request is malformed to retrieve the
    * requestID value using an event XML parser.
    */
-  private static class DSMLContentHandler extends DefaultHandler {
+  private class DSMLContentHandler extends DefaultHandler {
     private String requestID;
     /*
      * This function fetches the requestID value of the batchRequest xml
