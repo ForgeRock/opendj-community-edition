@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2014 ForgeRock AS.
+ *      Portions copyright 2011-2015 ForgeRock AS.
  */
 package org.opends.server.core;
 import org.opends.messages.MessageBuilder;
@@ -130,6 +130,20 @@ public class ExtendedOperationBasis
     }
   }
 
+
+  /** {@inheritDoc} */
+  @Override
+  public DN getProxiedAuthorizationDN()
+  {
+    return null;
+  }
+
+
+  /** {@inheritDoc} */
+  @Override
+  public void setProxiedAuthorizationDN(DN proxiedAuthorizationDN)
+  {
+  }
 
 
   /**

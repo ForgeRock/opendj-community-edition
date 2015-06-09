@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions copyright 2011-2014 ForgeRock AS.
+ *      Portions copyright 2011-2015 ForgeRock AS.
  */
 package org.opends.server.types;
 
@@ -460,6 +460,27 @@ public interface Operation extends Runnable
    *          if it should be the unauthenticated user..
    */
   public abstract DN getAuthorizationDN();
+
+  /**
+   * Retrieves the proxied authorization DN for this operation if proxied
+   * authorization has been requested.
+   *
+   * @return  The proxied authorization DN for this operation if proxied
+   *          authorization has been requested, or {@code null} if proxied
+   *          authorization has not been requested.
+   */
+  public abstract DN getProxiedAuthorizationDN();
+
+  /**
+   * Set the proxied authorization DN for this operation if proxied
+   * authorization has been requested.
+   *
+   * @param proxiedAuthorizationDN
+   *          The proxied authorization DN for this operation if proxied
+   *          authorization has been requested, or {@code null} if proxied
+   *          authorization has not been requested.
+   */
+  public abstract void setProxiedAuthorizationDN(DN proxiedAuthorizationDN);
 
   /**
    * Retrieves the set of attachments defined for this operation, as a

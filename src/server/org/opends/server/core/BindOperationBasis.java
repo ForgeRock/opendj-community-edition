@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2007-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2013 ForgeRock AS
+ *      Portions Copyright 2013-2015 ForgeRock AS
  */
 package org.opends.server.core;
 import org.opends.messages.Message;
@@ -334,6 +334,21 @@ public class BindOperationBasis
 
     cancelResult = new CancelResult(ResultCode.CANNOT_CANCEL,
         ERR_CANNOT_CANCEL_BIND.get());
+  }
+
+
+  /** {@inheritDoc} */
+  @Override
+  public DN getProxiedAuthorizationDN()
+  {
+    return null;
+  }
+
+
+  /** {@inheritDoc} */
+  @Override
+  public void setProxiedAuthorizationDN(DN proxiedAuthorizationDN)
+  {
   }
 
 

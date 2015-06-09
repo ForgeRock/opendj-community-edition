@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2014 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.workflowelement.localbackend;
 
@@ -48,12 +48,16 @@ import org.opends.server.controls.LDAPPostReadRequestControl;
 import org.opends.server.controls.LDAPPostReadResponseControl;
 import org.opends.server.controls.LDAPPreReadRequestControl;
 import org.opends.server.controls.LDAPPreReadResponseControl;
+import org.opends.server.controls.ProxiedAuthV1Control;
+import org.opends.server.controls.ProxiedAuthV2Control;
 import org.opends.server.core.*;
 import org.opends.server.types.*;
 import org.opends.server.workflowelement.LeafWorkflowElement;
 
 import static org.opends.messages.CoreMessages.*;
+import static org.opends.messages.ProtocolMessages.ERR_PROXYAUTH_AUTHZ_NOT_PERMITTED;
 import static org.opends.server.config.ConfigConstants.*;
+import static org.opends.server.util.ServerConstants.*;
 
 
 
@@ -355,8 +359,17 @@ public class LocalBackendWorkflowElement extends
       {
         final Control control = iter.next();
 
+        final DN aciTarget;
+        if (control.getOID().equals(OID_PROXIED_AUTH_V1) || control.getOID().equals(OID_PROXIED_AUTH_V2))
+        {
+          aciTarget = op.getClientConnection().getAuthenticationInfo().getAuthenticationDN();
+        }
+        else
+        {
+          aciTarget = targetDN;
+        }
         if (!AccessControlConfigManager.getInstance().getAccessControlHandler()
-            .isAllowed(targetDN, op, control))
+            .isAllowed(aciTarget, op, control))
         {
           // As per RFC 4511 4.1.11.
           if (control.isCritical())
@@ -374,6 +387,89 @@ public class LocalBackendWorkflowElement extends
     }
   }
 
+  /**
+   * Check the requester has the PROXIED_AUTH privilege in order to be able to use a proxy auth control.
+   *
+   * @param operation  The operation being checked
+   * @throws DirectoryException  If insufficient privileges are detected
+   */
+  static void checkPrivilegeForProxyAuthControl(Operation operation) throws DirectoryException
+  {
+    if (! operation.getClientConnection().hasPrivilege(Privilege.PROXIED_AUTH, operation))
+    {
+      throw new DirectoryException(ResultCode.AUTHORIZATION_DENIED,
+        ERR_PROXYAUTH_INSUFFICIENT_PRIVILEGES.get());
+    }
+  }
+
+  /**
+   * Check the requester has the authorization user in scope of proxy aci.
+   *
+   * @param operation  The operation being checked
+   * @param authorizationEntry  The entry being authorized as (e.g. from a proxy auth control)
+   * @throws DirectoryException  If no proxy permission is allowed
+   */
+  static void checkAciForProxyAuthControl(Operation operation, Entry authorizationEntry) throws DirectoryException
+  {
+    if (! AccessControlConfigManager.getInstance().getAccessControlHandler()
+      .mayProxy(operation.getClientConnection().getAuthenticationInfo().getAuthenticationEntry(),
+              authorizationEntry, operation))
+    {
+      throw new DirectoryException(ResultCode.AUTHORIZATION_DENIED,
+              ERR_PROXYAUTH_AUTHZ_NOT_PERMITTED.get(authorizationEntry.getDN().toString()));
+    }
+  }
+
+  /**
+   * Process the operation control with the given oid if it is a proxy auth control.
+   *
+   * Privilege and initial aci checks on the authenticating user are performed. The authenticating
+   * user must have the proxied-auth privilege, and the authz user must be in the scope of aci
+   * allowing the proxy right to the authenticating user.
+   *
+   * @param operation  The operation containing the control(s)
+   * @param oid  The OID of the detected proxy auth control
+   * @return <code>true</code> if the control has been processed, <code>false</code> if not
+   * @throws DirectoryException  If the control is used but permission/privileges are not given
+   */
+  static boolean processProxyAuthControls(Operation operation, String oid)
+    throws DirectoryException
+  {
+    final Entry authorizationEntry;
+
+    if (OID_PROXIED_AUTH_V1.equals(oid))
+    {
+      final ProxiedAuthV1Control proxyControlV1 = operation.getRequestControl(ProxiedAuthV1Control.DECODER);
+      // Log usage of legacy proxy authz V1 control.
+      operation.addAdditionalLogItem(AdditionalLogItem.keyOnly(operation.getClass(),
+        "obsoleteProxiedAuthzV1Control"));
+      checkPrivilegeForProxyAuthControl(operation);
+      authorizationEntry = proxyControlV1.getAuthorizationEntry();
+    }
+    else if (OID_PROXIED_AUTH_V2.equals(oid))
+    {
+      final ProxiedAuthV2Control proxyControlV2 = operation.getRequestControl(ProxiedAuthV2Control.DECODER);
+      checkPrivilegeForProxyAuthControl(operation);
+      authorizationEntry = proxyControlV2.getAuthorizationEntry();
+    }
+    else
+    {
+      return false;
+    }
+
+    checkAciForProxyAuthControl(operation, authorizationEntry);
+    operation.setAuthorizationEntry(authorizationEntry);
+
+    if (authorizationEntry == null)
+    {
+      operation.setProxiedAuthorizationDN(DN.NULL_DN);
+    }
+    else
+    {
+      operation.setProxiedAuthorizationDN(authorizationEntry.getDN());
+    }
+    return true;
+  }
 
 
   /**

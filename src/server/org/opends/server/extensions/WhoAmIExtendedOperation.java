@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2012 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.extensions;
 
@@ -38,6 +38,7 @@ import org.opends.server.api.ExtendedOperationHandler;
 import org.opends.server.config.ConfigException;
 import org.opends.server.controls.ProxiedAuthV1Control;
 import org.opends.server.controls.ProxiedAuthV2Control;
+import org.opends.server.core.AccessControlConfigManager;
 import org.opends.server.core.DirectoryServer;
 import org.opends.server.core.ExtendedOperation;
 import org.opends.server.loggers.debug.DebugTracer;
@@ -45,6 +46,8 @@ import org.opends.server.types.*;
 
 import static org.opends.messages.ExtensionMessages
     .ERR_EXTOP_WHOAMI_PROXYAUTH_INSUFFICIENT_PRIVILEGES;
+import static org.opends.messages.ProtocolMessages
+        .ERR_PROXYAUTH_AUTHZ_NOT_PERMITTED;
 import static org.opends.server.loggers.debug.DebugLogger.debugEnabled;
 import static org.opends.server.loggers.debug.DebugLogger.getTracer;
 import static org.opends.server.util.ServerConstants.*;
@@ -174,6 +177,15 @@ public class WhoAmIExtendedOperation
               "obsoleteProxiedAuthzV1Control"));
 
           authorizationEntry = proxyControlV1.getAuthorizationEntry();
+        }
+        // Check the requester has the authz user in scope of their proxy aci.
+        if (! AccessControlConfigManager.getInstance().getAccessControlHandler()
+                .mayProxy(clientConnection.getAuthenticationInfo().getAuthenticationEntry(),
+                        authorizationEntry, operation))
+        {
+          final DN dn = authorizationEntry.getDN();
+          throw new DirectoryException(ResultCode.AUTHORIZATION_DENIED,
+            ERR_PROXYAUTH_AUTHZ_NOT_PERMITTED.get(dn.toString()));
         }
         operation.setAuthorizationEntry(authorizationEntry);
       }

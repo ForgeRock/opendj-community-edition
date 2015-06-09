@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  *      Portions Copyright 2013 Manuel Gaupp
  */
 package org.opends.server.authorization.dseecompat;
@@ -689,38 +689,6 @@ public final class AciHandler extends
         Message message = WARN_ACI_NOT_VALID_DN.get(DNString);
         logError(message);
       }
-    }
-
-    // Check proxy authorization only if the entry has not already been
-    // processed (working on a new entry). If working on a new entry,
-    // then only do a proxy check if the right is not set to ACI_PROXY
-    // and the proxied authorization control has been decoded.
-    if (!container.hasSeenEntry())
-    {
-      if (container.isProxiedAuthorization()
-          && !container.hasRights(ACI_PROXY)
-          && !container.hasRights(ACI_SKIP_PROXY_CHECK))
-      {
-        int currentRights = container.getRights();
-        // Save the current rights so they can be put back if on
-        // success.
-        container.setRights(ACI_PROXY);
-        // Switch to the original authorization entry, not the proxied
-        // one.
-        container.useOrigAuthorizationEntry(true);
-        if (!accessAllowed(container))
-        {
-          return false;
-        }
-        // Access is ok, put the original rights back.
-        container.setRights(currentRights);
-        // Put the proxied authorization entry back to the current
-        // authorization entry.
-        container.useOrigAuthorizationEntry(false);
-      }
-      // Set the seen flag so proxy processing is not performed for this
-      // entry again.
-      container.setSeenEntry(true);
     }
 
     /*

@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
+ *      Portions Copyright 2015 ForgeRock AS
  */
 package org.opends.server.core;
 
@@ -73,6 +74,20 @@ public class UnbindOperationBasis
         ERR_CANNOT_CANCEL_UNBIND.get());
   }
 
+
+  /** {@inheritDoc} */
+  @Override
+  public DN getProxiedAuthorizationDN()
+  {
+    return null;
+  }
+
+
+  /** {@inheritDoc} */
+  @Override
+  public void setProxiedAuthorizationDN(DN proxiedAuthorizationDN)
+  {
+  }
 
 
   /**

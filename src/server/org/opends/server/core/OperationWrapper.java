@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2014 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.core;
 
@@ -443,6 +443,24 @@ public class OperationWrapper<W extends Operation> implements Operation
   public void setAuthorizationEntry(Entry authorizationEntry)
   {
     operation.setAuthorizationEntry(authorizationEntry);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DN getProxiedAuthorizationDN()
+  {
+    return operation.getProxiedAuthorizationDN();
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setProxiedAuthorizationDN(DN proxiedAuthorizationDN)
+  {
+    operation.setProxiedAuthorizationDN(proxiedAuthorizationDN);
   }
 
   /**

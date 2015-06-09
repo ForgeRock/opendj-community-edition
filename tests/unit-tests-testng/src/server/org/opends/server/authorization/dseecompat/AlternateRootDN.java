@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2008-2009 Sun Microsystems, Inc.
+ *      Portions Copyright 2015 ForgeRock AS
  */
 
 
@@ -30,6 +31,7 @@ package org.opends.server.authorization.dseecompat;
 
 
 
+import org.opends.server.protocols.ldap.LDAPResultCode;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 import org.testng.annotations.BeforeMethod;
@@ -119,10 +121,9 @@ public class AlternateRootDN extends AciTestCase {
   /**
    * This test uses two ACIs, one allowing proxy authorization to a user, and
    * the other allowing access to the userPassword attribute based on one of the
-   * alternate bind DNs of a root entry. The root entry does not have bypass-acl
-   * privileges (-bypass-acl), so searches will pass through to the ACI system.
-   * Searches are performed binding as a user, but proxying as each of the
-   * alternate bind DNs. All searches should succeed.
+   * alternate bind DNs of a root entry. However OPENDJ-2107 changes what ACI
+   * the original user requires to do proxy auth, so all these tests are now
+   * rejected.
    *
    * @throws Exception  If an unexpected result is received.
    */
@@ -130,24 +131,19 @@ public class AlternateRootDN extends AciTestCase {
   public void testAlternateProxyDNs() throws Exception {
     String aciLdif=makeAddLDIF("aci", user1, rootDNACI, proxyACI, controlACI);
     LDIFModify(aciLdif, DIR_MGR_DN, PWD);
-    String adminDNResults =
-            LDAPSearchParams(user3, PWD, adminDN, null, null,
-                    user1, pwdFilter, ATTR_USER_PASSWORD);
-    Assert.assertFalse(adminDNResults.equals(""));
-    HashMap<String, String> attrMap=getAttrMap(adminDNResults);
-    Assert.assertTrue(attrMap.containsKey(ATTR_USER_PASSWORD));
-    String adminRootDNResults =
-            LDAPSearchParams(user3, PWD, adminRootDN, null, null,
-                    user1, pwdFilter, ATTR_USER_PASSWORD);
-    Assert.assertFalse(adminRootDNResults.equals(""));
-    HashMap<String, String> attrMap1=getAttrMap(adminRootDNResults);
-    Assert.assertTrue(attrMap1.containsKey(ATTR_USER_PASSWORD));
-    String rootDNResults =
-            LDAPSearchParams(user3, PWD, adminDN, null, null,
-                    user1, pwdFilter, ATTR_USER_PASSWORD);
-    Assert.assertFalse(rootDNResults.equals(""));
-    HashMap<String, String> attrMap2=getAttrMap(rootDNResults);
-    Assert.assertTrue(attrMap2.containsKey(ATTR_USER_PASSWORD));
+
+    LDAPSearchParams(user3, PWD, adminDN, null, null,
+        user1, pwdFilter, ATTR_USER_PASSWORD,
+        false, false, LDAPResultCode.UNAVAILABLE_CRITICAL_EXTENSION);
+
+    LDAPSearchParams(user3, PWD, adminRootDN, null, null,
+        user1, pwdFilter, ATTR_USER_PASSWORD,
+        false, false, LDAPResultCode.UNAVAILABLE_CRITICAL_EXTENSION);
+
+    LDAPSearchParams(user3, PWD, adminDN, null, null,
+        user1, pwdFilter, ATTR_USER_PASSWORD,
+        false, false, LDAPResultCode.UNAVAILABLE_CRITICAL_EXTENSION);
+
     deleteAttrFromEntry(user1, "aci");
   }
 }

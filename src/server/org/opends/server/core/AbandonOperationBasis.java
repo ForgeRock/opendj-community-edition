@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2007-2008 Sun Microsystems, Inc.
+ *      Portions Copyright 2015 ForgeRock AS
  */
 package org.opends.server.core;
 import org.opends.messages.Message;
@@ -166,7 +167,18 @@ public class AbandonOperationBasis extends AbstractOperation
     };
   }
 
+  /** {@inheritDoc} */
+  @Override
+  public DN getProxiedAuthorizationDN()
+  {
+    return null;
+  }
 
+  /** {@inheritDoc} */
+  @Override
+  public void setProxiedAuthorizationDN(DN proxiedAuthorizationDN)
+  {
+  }
 
   /**
    * {@inheritDoc}
