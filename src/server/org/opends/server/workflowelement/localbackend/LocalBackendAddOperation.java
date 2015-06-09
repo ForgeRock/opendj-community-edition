@@ -1394,6 +1394,7 @@ addProcessing:
   protected void processControls(DN parentDN)
           throws DirectoryException
   {
+    LocalBackendWorkflowElement.evaluateProxyAuthControls(this);
     LocalBackendWorkflowElement.removeAllDisallowedControls(parentDN, this);
 
     List<Control> requestControls = getRequestControls();
@@ -1476,7 +1477,7 @@ addProcessing:
           postReadRequest =
                 getRequestControl(LDAPPostReadRequestControl.DECODER);
         }
-        else if (LocalBackendWorkflowElement.processProxyAuthControls(this, oid))
+        else if (LocalBackendWorkflowElement.isProxyAuthzControl(oid))
         {
           continue;
         }

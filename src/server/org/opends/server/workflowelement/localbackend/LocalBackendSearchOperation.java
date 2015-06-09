@@ -333,6 +333,7 @@ searchProcessing:
   protected void handleRequestControls()
           throws DirectoryException
   {
+    LocalBackendWorkflowElement.evaluateProxyAuthControls(this);
     LocalBackendWorkflowElement.removeAllDisallowedControls(baseDN, this);
 
     List<Control> requestControls  = getRequestControls();
@@ -422,7 +423,7 @@ searchProcessing:
                                 de.getMessageObject()), de);
           }
         }
-        else if (LocalBackendWorkflowElement.processProxyAuthControls(this, oid))
+        else if (LocalBackendWorkflowElement.isProxyAuthzControl(oid))
         {
           continue;
         }

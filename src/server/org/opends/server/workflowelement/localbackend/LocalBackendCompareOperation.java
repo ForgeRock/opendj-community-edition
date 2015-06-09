@@ -380,6 +380,7 @@ compareProcessing:
   protected void handleRequestControls()
           throws DirectoryException
   {
+    LocalBackendWorkflowElement.evaluateProxyAuthControls(this);
     LocalBackendWorkflowElement.removeAllDisallowedControls(entryDN, this);
 
     List<Control> requestControls = getRequestControls();
@@ -450,7 +451,7 @@ compareProcessing:
                                 de.getMessageObject()));
           }
         }
-        else if (LocalBackendWorkflowElement.processProxyAuthControls(this, oid))
+        else if (LocalBackendWorkflowElement.isProxyAuthzControl(oid))
         {
           continue;
         }

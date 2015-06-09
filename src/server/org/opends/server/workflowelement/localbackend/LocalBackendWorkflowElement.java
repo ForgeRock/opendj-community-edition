@@ -331,6 +331,22 @@ public class LocalBackendWorkflowElement extends
 
 
   /**
+   * Check if an OID is for a proxy authorization control.
+   *
+   * @param oid The OID to check
+   * @return <code>true</code> if the OID is for a proxy auth v1 or v2 control,
+   * <code>false</code> otherwise.
+   */
+  public static boolean isProxyAuthzControl(String oid)
+  {
+    if (OID_PROXIED_AUTH_V1.equals(oid) || OID_PROXIED_AUTH_V2.equals(oid))
+    {
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Removes all the disallowed request controls from the provided operation.
    * <p>
    * As per RFC 4511 4.1.11, if a disallowed request control is critical, then a
@@ -340,7 +356,7 @@ public class LocalBackendWorkflowElement extends
    *
    * @param targetDN
    *          the target DN on which the operation applies
-   * @param op
+   * @param operation
    *          the operation currently processed
    * @throws DirectoryException
    *           If a disallowed request control is critical, thrown with
@@ -349,27 +365,22 @@ public class LocalBackendWorkflowElement extends
    *           could not be decoded. Care must be taken not to expose any
    *           potentially sensitive information in the exception.
    */
-  static void removeAllDisallowedControls(DN targetDN, Operation op)
+  static void removeAllDisallowedControls(DN targetDN, Operation operation)
       throws DirectoryException
   {
-    final List<Control> requestControls = op.getRequestControls();
+    List<Control> requestControls = operation.getRequestControls();
     if (requestControls != null && !requestControls.isEmpty())
     {
       for (Iterator<Control> iter = requestControls.iterator(); iter.hasNext();)
       {
         final Control control = iter.next();
 
-        final DN aciTarget;
-        if (control.getOID().equals(OID_PROXIED_AUTH_V1) || control.getOID().equals(OID_PROXIED_AUTH_V2))
+        if (isProxyAuthzControl(control.getOID()))
         {
-          aciTarget = op.getClientConnection().getAuthenticationInfo().getAuthenticationDN();
-        }
-        else
-        {
-          aciTarget = targetDN;
+          continue;
         }
         if (!AccessControlConfigManager.getInstance().getAccessControlHandler()
-            .isAllowed(aciTarget, op, control))
+            .isAllowed(targetDN, operation, control))
         {
           // As per RFC 4511 4.1.11.
           if (control.isCritical())
@@ -388,12 +399,53 @@ public class LocalBackendWorkflowElement extends
   }
 
   /**
+   * Evaluate all aci and privilege checks for any proxy auth controls.
+   * This must be done before evaluating all other controls so that their aci
+   * can then be checked correctly.
+   *
+   * @param operation  The operation containing the controls
+   * @throws DirectoryException if a proxy auth control is found but cannot
+   * be used.
+   */
+  public static void evaluateProxyAuthControls(Operation operation)
+      throws DirectoryException
+  {
+    final List<Control> requestControls = operation.getRequestControls();
+    if (requestControls != null && !requestControls.isEmpty())
+    {
+      for (Control control : requestControls)
+      {
+        final String oid = control.getOID();
+        if (isProxyAuthzControl(oid))
+        {
+          if (AccessControlConfigManager.getInstance().getAccessControlHandler()
+            .isAllowed(operation.getClientConnection()
+              .getAuthenticationInfo().getAuthenticationDN(), operation, control))
+          {
+            processProxyAuthControls(operation, oid);
+          }
+          else
+          {
+            // As per RFC 4511 4.1.11.
+            if (control.isCritical())
+            {
+              throw new DirectoryException(
+                ResultCode.UNAVAILABLE_CRITICAL_EXTENSION,
+                ERR_CONTROL_INSUFFICIENT_ACCESS_RIGHTS.get(control.getOID()));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Check the requester has the PROXIED_AUTH privilege in order to be able to use a proxy auth control.
    *
    * @param operation  The operation being checked
    * @throws DirectoryException  If insufficient privileges are detected
    */
-  static void checkPrivilegeForProxyAuthControl(Operation operation) throws DirectoryException
+  private static void checkPrivilegeForProxyAuthControl(Operation operation) throws DirectoryException
   {
     if (! operation.getClientConnection().hasPrivilege(Privilege.PROXIED_AUTH, operation))
     {
@@ -409,7 +461,8 @@ public class LocalBackendWorkflowElement extends
    * @param authorizationEntry  The entry being authorized as (e.g. from a proxy auth control)
    * @throws DirectoryException  If no proxy permission is allowed
    */
-  static void checkAciForProxyAuthControl(Operation operation, Entry authorizationEntry) throws DirectoryException
+  private static void checkAciForProxyAuthControl(Operation operation, Entry authorizationEntry)
+    throws DirectoryException
   {
     if (! AccessControlConfigManager.getInstance().getAccessControlHandler()
       .mayProxy(operation.getClientConnection().getAuthenticationInfo().getAuthenticationEntry(),
@@ -432,7 +485,7 @@ public class LocalBackendWorkflowElement extends
    * @return <code>true</code> if the control has been processed, <code>false</code> if not
    * @throws DirectoryException  If the control is used but permission/privileges are not given
    */
-  static boolean processProxyAuthControls(Operation operation, String oid)
+  private static void processProxyAuthControls(Operation operation, String oid)
     throws DirectoryException
   {
     final Entry authorizationEntry;
@@ -454,7 +507,7 @@ public class LocalBackendWorkflowElement extends
     }
     else
     {
-      return false;
+      return;
     }
 
     checkAciForProxyAuthControl(operation, authorizationEntry);
@@ -468,7 +521,6 @@ public class LocalBackendWorkflowElement extends
     {
       operation.setProxiedAuthorizationDN(authorizationEntry.getDN());
     }
-    return true;
   }
 
 

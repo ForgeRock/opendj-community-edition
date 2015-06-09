@@ -443,6 +443,7 @@ deleteProcessing:
    */
   private void handleRequestControls() throws DirectoryException
   {
+    LocalBackendWorkflowElement.evaluateProxyAuthControls(this);
     LocalBackendWorkflowElement.removeAllDisallowedControls(entryDN, this);
 
     List<Control> requestControls = getRequestControls();
@@ -519,7 +520,7 @@ deleteProcessing:
           preReadRequest =
                 getRequestControl(LDAPPreReadRequestControl.DECODER);
         }
-        else if (LocalBackendWorkflowElement.processProxyAuthControls(this, oid))
+        else if (LocalBackendWorkflowElement.isProxyAuthzControl(oid))
         {
           continue;
         }
