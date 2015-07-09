@@ -17,20 +17,20 @@ MINOR_VERSION=6
 POINT_VERSION=3
 
 # The product reference site
-DOC_REFERENCE_HOME=http://opendj.forgerock.org/
+DOC_REFERENCE_HOME=https://backstage.forgerock.com/#!/docs/opendj/2.6.0
 
 # The product documentation set reference
 # https://wikis.forgerock.org/confluence/display/OPENDJ/Home
-DOC_REFERENCE_WIKI=http://docs.forgerock.org/en/opendj/2.6.0/
+DOC_REFERENCE_WIKI=https://backstage.forgerock.com/#!/docs/opendj/2.6.0
 
 # The setup document reference site
-DOC_REFERENCE_SETUP=http://docs.forgerock.org/en/opendj/2.6.0/install-guide/
+DOC_REFERENCE_SETUP=https://backstage.forgerock.com/#!/docs/opendj/2.6.0/install-guide
 
 # The Quick reference guide documentation set reference
-DOC_QUICK_REFERENCE_GUIDE=http://docs.forgerock.org/en/opendj/2.6.0/admin-guide/
+DOC_QUICK_REFERENCE_GUIDE=https://backstage.forgerock.com/#!/docs/opendj/2.6.0/admin-guide
 
 # The Administration Guide reference
-ADMINISTRATION_GUIDE_URL=http://docs.forgerock.org/en/opendj/2.6.0/admin-guide/
+ADMINISTRATION_GUIDE_URL=https://backstage.forgerock.com/#!/docs/opendj/2.6.0/admin-guide
 
 # The version qualifier string for the Directory Server.  It should be blank
 # for the first official release with a new major, minor, and point version
@@ -43,4 +43,3 @@ VERSION_QUALIFIER=
 # specific problem or set of problems identified in the corresponding official
 # release.
 FIX_IDS=
-
