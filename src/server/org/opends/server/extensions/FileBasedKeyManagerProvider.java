@@ -27,8 +27,7 @@
  */
 package org.opends.server.extensions;
 import org.opends.messages.Message;
-
-
+import static org.opends.server.loggers.ErrorLogger.*;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -38,6 +37,7 @@ import java.io.IOException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -286,6 +286,19 @@ public class FileBasedKeyManagerProvider
                                    message, e);
     }
 
+    try {
+      // Troubleshooting aid; Analyse the keystore for the presence of at least one private entry.
+      if (!findOneKeyEntry(keyStore))
+      {
+        Message message = NOTE_NO_KEY_ENTRY_IN_KEYSTORE.get(keyStoreFile);
+        logError(message);
+      }
+    }
+    catch (Exception e) {
+      if (debugEnabled()) {
+        TRACER.debugCaught(DebugLogLevel.ERROR, e);
+      }
+    }
 
     try
     {
@@ -309,6 +322,19 @@ public class FileBasedKeyManagerProvider
     }
   }
 
+  private boolean findOneKeyEntry(KeyStore keyStore) throws KeyStoreException
+  {
+    Enumeration<String> aliases = keyStore.aliases();
+    while (aliases.hasMoreElements())
+    {
+      String alias = aliases.nextElement();
+      if (keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class))
+      {
+        return true;
+      }
+    }
+    return false;
+  }
 
 
   /**

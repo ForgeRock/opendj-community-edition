@@ -1473,6 +1473,10 @@ public final class LDAPConnectionHandler extends
           .getKeyManagerProvider(keyMgrDN);
       if (keyManagerProvider == null)
       {
+        if (config.isUseSSL()) {
+          Message message = NOTE_NULL_KEY_PROVIDER_MANAGER.get(keyMgrDN.toString(), friendlyName);
+          logError(message);
+        }
         keyManagerProvider = new NullKeyManagerProvider();
       }
 
@@ -1485,7 +1489,7 @@ public final class LDAPConnectionHandler extends
       else
       {
         keyManagers = SelectableCertificateKeyManager.wrap(
-            keyManagerProvider.getKeyManagers(), alias);
+            keyManagerProvider.getKeyManagers(), alias, friendlyName);
       }
 
       DN trustMgrDN = config.getTrustManagerProviderDN();
