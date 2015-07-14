@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2013 ForgeRock AS
+ *      Portions copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.protocols.ldap;
 
@@ -1473,10 +1473,6 @@ public final class LDAPConnectionHandler extends
           .getKeyManagerProvider(keyMgrDN);
       if (keyManagerProvider == null)
       {
-        if (config.isUseSSL()) {
-          Message message = NOTE_NULL_KEY_PROVIDER_MANAGER.get(keyMgrDN.toString(), friendlyName);
-          logError(message);
-        }
         keyManagerProvider = new NullKeyManagerProvider();
       }
 
@@ -1489,7 +1485,7 @@ public final class LDAPConnectionHandler extends
       else
       {
         keyManagers = SelectableCertificateKeyManager.wrap(
-            keyManagerProvider.getKeyManagers(), alias, friendlyName);
+            keyManagerProvider.getKeyManagers(), alias);
       }
 
       DN trustMgrDN = config.getTrustManagerProviderDN();
