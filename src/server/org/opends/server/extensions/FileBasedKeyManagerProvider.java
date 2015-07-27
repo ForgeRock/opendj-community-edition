@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -248,7 +249,67 @@ public class FileBasedKeyManagerProvider
     currentConfig.removeFileBasedChangeListener(this);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean containsKeyWithAlias(String alias)
+  {
+    KeyStore keyStore;
 
+    try {
+      keyStore = getKeystore();
+    } catch (DirectoryException e) {
+      return false;
+    }
+
+    try {
+      Enumeration<String> aliases = keyStore.aliases();
+      while (aliases.hasMoreElements()) {
+        String theAlias = aliases.nextElement();
+        if (alias.equals(theAlias) && keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)) {
+          return true;
+        }
+      }
+    } catch (KeyStoreException e) {
+    }
+
+    return false;
+  }
+
+  private KeyStore getKeystore()
+          throws DirectoryException
+  {
+    KeyStore keyStore;
+    try
+    {
+      keyStore = KeyStore.getInstance(keyStoreType);
+
+      FileInputStream inputStream =
+              new FileInputStream(getFileForPath(keyStoreFile));
+      try
+      {
+        keyStore.load(inputStream, keyStorePIN);
+      }
+      finally
+      {
+        close(inputStream);
+      }
+    }
+    catch (Exception e)
+    {
+      if (debugEnabled())
+      {
+        TRACER.debugCaught(DebugLogLevel.ERROR, e);
+      }
+
+      Message message = ERR_FILE_KEYMANAGER_CANNOT_LOAD.get(
+              keyStoreFile, getExceptionMessage(e));
+      throw new DirectoryException(DirectoryServer.getServerErrorResultCode(),
+              message, e);
+    }
+    return keyStore;
+  }
 
   /**
    * Retrieves a set of <CODE>KeyManager</CODE> objects that may be used for
@@ -263,32 +324,16 @@ public class FileBasedKeyManagerProvider
   public KeyManager[] getKeyManagers()
          throws DirectoryException
   {
-    KeyStore keyStore;
+    KeyStore keyStore = getKeystore();
+
     try
     {
-      keyStore = KeyStore.getInstance(keyStoreType);
-
-      FileInputStream inputStream =
-           new FileInputStream(getFileForPath(keyStoreFile));
-      keyStore.load(inputStream, keyStorePIN);
-      inputStream.close();
-    }
-    catch (Exception e)
-    {
-      if (debugEnabled())
+      if (! findOneKeyEntry(keyStore))
       {
-        TRACER.debugCaught(DebugLogLevel.ERROR, e);
+        // Troubleshooting message to let now of possible config error
+        Message message = WARN_NO_KEY_ENTRY_IN_KEYSTORE.get(keyStoreFile);
       }
 
-      Message message = ERR_FILE_KEYMANAGER_CANNOT_LOAD.get(
-          keyStoreFile, getExceptionMessage(e));
-      throw new DirectoryException(DirectoryServer.getServerErrorResultCode(),
-                                   message, e);
-    }
-
-
-    try
-    {
       String keyManagerAlgorithm = KeyManagerFactory.getDefaultAlgorithm();
       KeyManagerFactory keyManagerFactory =
            KeyManagerFactory.getInstance(keyManagerAlgorithm);
@@ -309,7 +354,36 @@ public class FileBasedKeyManagerProvider
     }
   }
 
+  /** {@inheritDoc} */
+  @Override
+  public boolean containsAtLeastOneKey()
+  {
+    try
+    {
+      return findOneKeyEntry(getKeystore());
+    }
+    catch (Exception e) {
+      if (debugEnabled())
+      {
+        TRACER.debugCaught(DebugLogLevel.ERROR, e);
+      }
+    }
+    return false;
+  }
 
+  private boolean findOneKeyEntry(KeyStore keyStore) throws KeyStoreException
+  {
+    Enumeration<String> aliases = keyStore.aliases();
+    while (aliases.hasMoreElements())
+    {
+      String alias = aliases.nextElement();
+      if (keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class))
+      {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /**
    * {@inheritDoc}

@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2006-2008 Sun Microsystems, Inc.
+ *      Copyright 2006-2015 Sun Microsystems, Inc.
  */
 package org.opends.server.api;
 import org.opends.messages.Message;
@@ -75,6 +75,30 @@ public abstract class KeyManagerProvider
   public abstract void initializeKeyManagerProvider(T configuration)
       throws ConfigException, InitializationException;
 
+
+  /**
+   *
+   * Verifies that an alias is defined in the scope of this Key Manager.
+   *
+   * @param alias
+   *          The alias to check.
+   * @return true if the alias exists, false otherwise
+   */
+  public boolean containsKeyWithAlias(String alias)
+  {
+    return true;
+  }
+
+  /**
+   *
+   * Verifies that the keystore has at least one usable key.
+   *
+   * @return true if the keystore has at least one usable key, false otherwise
+   */
+  public boolean containsAtLeastOneKey()
+  {
+    return true;
+  }
 
 
   /**

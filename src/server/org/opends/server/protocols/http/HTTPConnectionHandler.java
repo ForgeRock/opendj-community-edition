@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2013-2014 ForgeRock AS
+ *      Copyright 2013-2015 ForgeRock AS
  */
 package org.opends.server.protocols.http;
 
@@ -494,6 +494,8 @@ public class HTTPConnectionHandler extends
   public void initializeConnectionHandler(HTTPConnectionHandlerCfg config)
       throws ConfigException, InitializationException
   {
+    this.enabled = config.isEnabled();
+
     if (friendlyName == null)
     {
       friendlyName = config.dn().getRDN().getAttributeValue(0).toString();
@@ -510,6 +512,7 @@ public class HTTPConnectionHandler extends
     // Configure SSL if needed.
     try
     {
+      // This call may disable the connector if wrong SSL settings
       configureSSL(config);
     }
     catch (DirectoryException e)
@@ -533,7 +536,6 @@ public class HTTPConnectionHandler extends
 
     this.initConfig = config;
     this.currentConfig = config;
-    this.enabled = this.currentConfig.isEnabled();
   }
 
   private String getHandlerName(HTTPConnectionHandlerCfg config)
@@ -711,6 +713,8 @@ public class HTTPConnectionHandler extends
     setName(handlerName);
 
     boolean lastIterationFailed = false;
+    boolean starting = true;
+
     while (!shutdownRequested)
     {
       // If this connection handler is not enabled, then just sleep
@@ -720,6 +724,20 @@ public class HTTPConnectionHandler extends
         if (isListening())
         {
           stopHttpServer();
+        }
+
+        if (starting)
+        {
+          // This may happen if there was an initialisation error
+          // which led to disable the connector.
+          // The main thread is waiting for the connector to listen
+          // on its port, which will not occur yet,
+          // so notify here to allow the server startup to complete.
+          synchronized (waitListen)
+          {
+            starting = false;
+            waitListen.notify();
+          }
         }
 
         StaticUtils.sleep(1000);
@@ -1053,6 +1071,13 @@ public class HTTPConnectionHandler extends
     }
   }
 
+  private void disableAndWarn()
+  {
+    Message message = WARN_DISABLE_CONNECTION.get(friendlyName);
+    logError(message);
+    enabled = false;
+  }
+
   private SSLContext createSSLContext(HTTPConnectionHandlerCfg config)
       throws Exception
   {
@@ -1066,7 +1091,17 @@ public class HTTPConnectionHandler extends
         DirectoryServer.getKeyManagerProvider(keyMgrDN);
     if (keyManagerProvider == null)
     {
+      Message message = WARN_NULL_KEY_PROVIDER_MANAGER.get(keyMgrDN.toString(), friendlyName);
+      logError(message);
+      disableAndWarn();
       keyManagerProvider = new NullKeyManagerProvider();
+      // The SSL connection is unusable without a key manager provider
+    }
+    else if (! keyManagerProvider.containsAtLeastOneKey())
+    {
+      Message message = WARN_INVALID_KEYSTORE.get(friendlyName);
+      logError(message);
+      disableAndWarn();
     }
 
     String alias = config.getSSLCertNickname();
@@ -1077,6 +1112,12 @@ public class HTTPConnectionHandler extends
     }
     else
     {
+      if (!keyManagerProvider.containsKeyWithAlias(alias))
+      {
+        Message message = WARN_KEYSTORE_DOES_NOT_CONTAIN_ALIAS.get(alias, friendlyName);
+        logError(message);
+        disableAndWarn();
+      }
       keyManagers =
           SelectableCertificateKeyManager.wrap(keyManagerProvider
               .getKeyManagers(), alias);
