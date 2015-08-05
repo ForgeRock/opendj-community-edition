@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2013 ForgeRock AS.
+ *      Copyright 2013-2015 ForgeRock AS.
  */
 package org.opends.server.extensions;
 
@@ -84,12 +84,6 @@ public class PBKDF2PasswordStorageScheme
   // The number of bytes the SHA-1 algorithm produces
   private static final int SHA1_LENGTH = 20;
 
-  // The factory used to generate the PBKDF2 hashes.
-  private SecretKeyFactory factory;
-
-  // The lock used to provide threadsafe access to the message digest.
-  private Object factoryLock;
-
   // The secure random number generator to use to generate the salt values.
   private SecureRandom random;
 
@@ -117,11 +111,11 @@ public class PBKDF2PasswordStorageScheme
                    PBKDF2PasswordStorageSchemeCfg configuration)
          throws ConfigException, InitializationException
   {
-    factoryLock = new Object();
     try
     {
       random = SecureRandom.getInstance(SECURE_PRNG_SHA1);
-      factory = SecretKeyFactory.getInstance(MESSAGE_DIGEST_ALGORITHM_PBKDF2);
+      // Just try to verify if the algorithm is supported.
+      SecretKeyFactory.getInstance(MESSAGE_DIGEST_ALGORITHM_PBKDF2);
     }
     catch (NoSuchAlgorithmException e)
     {
@@ -175,47 +169,15 @@ public class PBKDF2PasswordStorageScheme
    */
   @Override()
   public ByteString encodePassword(ByteSequence plaintext)
-         throws DirectoryException
+      throws DirectoryException
   {
-    byte[] saltBytes     = new byte[NUM_SALT_BYTES];
-    byte[] digestBytes;
-    int    iterations    = config.getPBKDF2Iterations();
+    byte[] saltBytes      = new byte[NUM_SALT_BYTES];
+    int    iterations     = config.getPBKDF2Iterations();
 
-    synchronized(factoryLock)
-    {
-      try
-      {
-        random.nextBytes(saltBytes);
+    byte[] digestBytes = encodeWithRandomSalt(plaintext, saltBytes, iterations,random);
+    byte[] hashPlusSalt = concatenateHashPlusSalt(saltBytes, digestBytes);
 
-        KeySpec spec = new PBEKeySpec(plaintext.toString().toCharArray(),
-            saltBytes, iterations, SHA1_LENGTH * 8);
-        digestBytes = factory.generateSecret(spec).getEncoded();
-      }
-      catch (Exception e)
-      {
-        if (debugEnabled())
-        {
-          TRACER.debugCaught(DebugLogLevel.ERROR, e);
-        }
-
-        Message message = ERR_PWSCHEME_CANNOT_ENCODE_PASSWORD.get(
-            CLASS_NAME, getExceptionMessage(e));
-        throw new DirectoryException(DirectoryServer.getServerErrorResultCode(),
-                                     message, e);
-      }
-    }
-    // Append the salt to the hashed value and base64-the whole thing.
-    byte[] hashPlusSalt = new byte[digestBytes.length + NUM_SALT_BYTES];
-
-    System.arraycopy(digestBytes, 0, hashPlusSalt, 0, digestBytes.length);
-    System.arraycopy(saltBytes, 0, hashPlusSalt, digestBytes.length,
-                     NUM_SALT_BYTES);
-
-    StringBuilder sb = new StringBuilder();
-    sb.append(Integer.toString(iterations));
-    sb.append(':');
-    sb.append(Base64.encode(hashPlusSalt));
-    return ByteString.valueOf(sb.toString());
+    return ByteString.valueOf(iterations + ":" + Base64.encode(hashPlusSalt));
   }
 
 
@@ -227,14 +189,7 @@ public class PBKDF2PasswordStorageScheme
   public ByteString encodePasswordWithScheme(ByteSequence plaintext)
          throws DirectoryException
   {
-    StringBuilder buffer = new StringBuilder();
-    buffer.append('{');
-    buffer.append(STORAGE_SCHEME_NAME_PBKDF2);
-    buffer.append('}');
-
-    buffer.append(encodePassword(plaintext));
-
-    return ByteString.valueOf(buffer.toString());
+    return ByteString.valueOf('{' + STORAGE_SCHEME_NAME_PBKDF2 + '}' + encodePassword(plaintext));
   }
 
 
@@ -249,26 +204,17 @@ public class PBKDF2PasswordStorageScheme
 
     // Split the iterations from the stored value (separated by a ":")
     // Base64-decode the remaining value and take the last 8 bytes as the salt.
-    int iterations;
-    byte[] saltBytes;
-    byte[] digestBytes = new byte[SHA1_LENGTH];
-    int saltLength = 0;
     try
     {
-      String stored = storedPassword.toString();
-      int stored_length = stored.length();
-      int pos = 0;
-      while (pos < stored_length && stored.charAt(pos) != ':')
-      {
-        pos++;
-      }
-      if (pos >= (stored_length - 1) || pos == 0)
+      final String stored = storedPassword.toString();
+      final int pos = stored.indexOf(':');
+      if (pos == -1)
         throw new Exception();
 
-      iterations = Integer.parseInt(stored.substring(0, pos));
+      final int iterations = Integer.parseInt(stored.substring(0, pos));
       byte[] decodedBytes = Base64.decode(stored.substring(pos + 1));
 
-      saltLength = decodedBytes.length - SHA1_LENGTH;
+      final int saltLength = decodedBytes.length - SHA1_LENGTH;
       if (saltLength <= 0)
       {
         Message message =
@@ -277,10 +223,12 @@ public class PBKDF2PasswordStorageScheme
         ErrorLogger.logError(message);
         return false;
       }
-      saltBytes = new byte[saltLength];
+
+      final byte[] digestBytes = new byte[SHA1_LENGTH];
+      final byte[] saltBytes = new byte[saltLength];
       System.arraycopy(decodedBytes, 0, digestBytes, 0, SHA1_LENGTH);
-      System.arraycopy(decodedBytes, SHA1_LENGTH, saltBytes, 0,
-                       saltLength);
+      System.arraycopy(decodedBytes, SHA1_LENGTH, saltBytes, 0, saltLength);
+      return encodeAndMatch(plaintextPassword, saltBytes, digestBytes, iterations);
     }
     catch (Exception e)
     {
@@ -294,38 +242,6 @@ public class PBKDF2PasswordStorageScheme
       ErrorLogger.logError(message);
       return false;
     }
-
-
-    // Use the salt to generate a digest based on the provided plain-text value.
-    int plainBytesLength = plaintextPassword.length();
-    byte[] plainPlusSalt = new byte[plainBytesLength + saltLength];
-    plaintextPassword.copyTo(plainPlusSalt);
-    System.arraycopy(saltBytes, 0, plainPlusSalt, plainBytesLength,
-                     saltLength);
-
-    byte[] userDigestBytes;
-
-    synchronized (factoryLock)
-    {
-      try
-      {
-        KeySpec spec = new PBEKeySpec(
-            plaintextPassword.toString().toCharArray(), saltBytes,
-            iterations, SHA1_LENGTH * 8);
-        userDigestBytes = factory.generateSecret(spec).getEncoded();
-      }
-      catch (Exception e)
-      {
-        if (debugEnabled())
-        {
-          TRACER.debugCaught(DebugLogLevel.ERROR, e);
-        }
-
-        return false;
-      }
-    }
-
-    return Arrays.equals(digestBytes, userDigestBytes);
   }
 
 
@@ -360,45 +276,13 @@ public class PBKDF2PasswordStorageScheme
   public ByteString encodeAuthPassword(ByteSequence plaintext)
          throws DirectoryException
   {
-    byte[] saltBytes     = new byte[NUM_SALT_BYTES];
-    byte[] digestBytes;
-    int    iterations    = config.getPBKDF2Iterations();
+    byte[] saltBytes      = new byte[NUM_SALT_BYTES];
+    int    iterations     = config.getPBKDF2Iterations();
+    byte[] digestBytes = encodeWithRandomSalt(plaintext, saltBytes, iterations,random);
 
-    synchronized(factoryLock)
-    {
-      try
-      {
-        random.nextBytes(saltBytes);
-
-        KeySpec spec = new PBEKeySpec(
-            plaintext.toString().toCharArray(), saltBytes,
-            iterations, SHA1_LENGTH * 8);
-        digestBytes = factory.generateSecret(spec).getEncoded();
-      }
-      catch (Exception e)
-      {
-        if (debugEnabled())
-        {
-          TRACER.debugCaught(DebugLogLevel.ERROR, e);
-        }
-
-        Message message = ERR_PWSCHEME_CANNOT_ENCODE_PASSWORD.get(
-            CLASS_NAME, getExceptionMessage(e));
-        throw new DirectoryException(DirectoryServer.getServerErrorResultCode(),
-                                     message, e);
-      }
-    }
     // Encode and return the value.
-    StringBuilder authPWValue = new StringBuilder();
-    authPWValue.append(AUTH_PASSWORD_SCHEME_NAME_PBKDF2);
-    authPWValue.append('$');
-    authPWValue.append(Integer.toString(iterations));
-    authPWValue.append(':');
-    authPWValue.append(Base64.encode(saltBytes));
-    authPWValue.append('$');
-    authPWValue.append(Base64.encode(digestBytes));
-
-    return ByteString.valueOf(authPWValue.toString());
+    return ByteString.valueOf(AUTH_PASSWORD_SCHEME_NAME_PBKDF2 + '$'
+        + iterations + ':' + Base64.encode(saltBytes) + '$' + Base64.encode(digestBytes));
   }
 
 
@@ -410,23 +294,17 @@ public class PBKDF2PasswordStorageScheme
   public boolean authPasswordMatches(ByteSequence plaintextPassword,
                                      String authInfo, String authValue)
   {
-    byte[] saltBytes;
-    byte[] digestBytes;
-    int    iterations;
-
     try
     {
-      int pos = 0;
-      int length = authInfo.length();
-      while (pos < length && authInfo.charAt(pos) != ':')
+      int pos = authInfo.indexOf(':');
+      if (pos == -1)
       {
-        pos++;
-      }
-      if (pos >= (length - 1) || pos == 0)
         throw new Exception();
-      iterations = Integer.parseInt(authInfo.substring(0, pos));
-      saltBytes   = Base64.decode(authInfo.substring(pos + 1));
-      digestBytes = Base64.decode(authValue);
+      }
+      int iterations = Integer.parseInt(authInfo.substring(0, pos));
+      byte[] saltBytes   = Base64.decode(authInfo.substring(pos + 1));
+      byte[] digestBytes = Base64.decode(authValue);
+      return encodeAndMatch(plaintextPassword, saltBytes, digestBytes, iterations);
     }
     catch (Exception e)
     {
@@ -434,40 +312,8 @@ public class PBKDF2PasswordStorageScheme
       {
         TRACER.debugCaught(DebugLogLevel.ERROR, e);
       }
-
       return false;
     }
-
-
-    int plainBytesLength = plaintextPassword.length();
-    byte[] plainPlusSalt = new byte[plainBytesLength + saltBytes.length];
-    plaintextPassword.copyTo(plainPlusSalt);
-    System.arraycopy(saltBytes, 0, plainPlusSalt, plainBytesLength,
-                     saltBytes.length);
-
-    byte[] userDigestBytes;
-
-    synchronized (factoryLock)
-    {
-      try
-      {
-        KeySpec spec = new PBEKeySpec(
-            plaintextPassword.toString().toCharArray(), saltBytes,
-            iterations, SHA1_LENGTH * 8);
-        userDigestBytes = factory.generateSecret(spec).getEncoded();
-      }
-      catch (Exception e)
-      {
-        if (debugEnabled())
-        {
-          TRACER.debugCaught(DebugLogLevel.ERROR, e);
-        }
-
-        return false;
-      }
-    }
-
-    return Arrays.equals(digestBytes, userDigestBytes);
   }
 
 
@@ -540,43 +386,92 @@ public class PBKDF2PasswordStorageScheme
   public static String encodeOffline(byte[] passwordBytes)
          throws DirectoryException
   {
-    byte[] saltBytes     = new byte[NUM_SALT_BYTES];
-    byte[] digestBytes;
-    int    iterations    = 10000;
+    byte[] saltBytes      = new byte[NUM_SALT_BYTES];
+    int    iterations     = 10000;
 
+    final ByteString password = ByteString.wrap(passwordBytes);
+    byte[] digestBytes = encodeWithRandomSalt(password, saltBytes, iterations);
+    byte[] hashPlusSalt = concatenateHashPlusSalt(saltBytes, digestBytes);
+
+    return '{' + STORAGE_SCHEME_NAME_PBKDF2 + '}' + iterations + ':' + Base64.encode(hashPlusSalt);
+  }
+
+
+
+  private static byte[] encodeWithRandomSalt(ByteString plaintext, byte[] saltBytes, int iterations)
+      throws DirectoryException
+  {
     try
     {
-      SecureRandom.getInstance(SECURE_PRNG_SHA1).nextBytes(saltBytes);
-
-      KeySpec spec = new PBEKeySpec(
-          passwordBytes.toString().toCharArray(), saltBytes,
-          iterations, SHA1_LENGTH * 8);
-      digestBytes = SecretKeyFactory
-          .getInstance(MESSAGE_DIGEST_ALGORITHM_PBKDF2)
-          .generateSecret(spec).getEncoded();
+      final SecureRandom random = SecureRandom.getInstance(SECURE_PRNG_SHA1);
+      return encodeWithRandomSalt(plaintext, saltBytes, iterations, random);
+    }
+    catch (DirectoryException e)
+    {
+      throw e;
     }
     catch (Exception e)
     {
-      if (debugEnabled())
-      {
-        TRACER.debugCaught(DebugLogLevel.ERROR, e);
-      }
-
-      Message message = ERR_PWSCHEME_CANNOT_ENCODE_PASSWORD.get(
-          CLASS_NAME, getExceptionMessage(e));
-      throw new DirectoryException(DirectoryServer.getServerErrorResultCode(),
-          message, e);
+      throw cannotEncodePassword(e);
     }
+  }
 
-    // Append the salt to the hashed value and base64-the whole thing.
-    byte[] hashPlusSalt = new byte[digestBytes.length + NUM_SALT_BYTES];
+  private static byte[] encodeWithSalt(ByteSequence plaintext, byte[] saltBytes, int iterations)
+      throws DirectoryException
+  {
+    final char[] plaintextChars = plaintext.toString().toCharArray();
+    try
+    {
+      final SecretKeyFactory factory = SecretKeyFactory.getInstance(MESSAGE_DIGEST_ALGORITHM_PBKDF2);
+      KeySpec spec = new PBEKeySpec(plaintextChars, saltBytes, iterations, SHA1_LENGTH * 8);
+      return factory.generateSecret(spec).getEncoded();
+    }
+    catch (Exception e)
+    {
+      throw cannotEncodePassword(e);
+    }
+    finally
+    {
+      Arrays.fill(plaintextChars, '0');
+    }
+  }
 
+  private boolean encodeAndMatch(ByteSequence plaintext, byte[] saltBytes, byte[] digestBytes, int iterations)
+  {
+    try
+    {
+      final byte[] userDigestBytes = encodeWithSalt(plaintext, saltBytes, iterations);
+      return Arrays.equals(digestBytes, userDigestBytes);
+    }
+    catch (Exception e)
+    {
+      return false;
+    }
+  }
+
+  private static byte[] encodeWithRandomSalt(ByteSequence plaintext, byte[] saltBytes,
+                                             int iterations, SecureRandom random)
+      throws DirectoryException
+  {
+    random.nextBytes(saltBytes);
+    return encodeWithSalt(plaintext, saltBytes, iterations);
+  }
+
+  private static DirectoryException cannotEncodePassword(Exception e)
+  {
+    if (debugEnabled())
+    {
+      TRACER.debugCaught(DebugLogLevel.ERROR, e);
+    }
+    Message message = ERR_PWSCHEME_CANNOT_ENCODE_PASSWORD.get(CLASS_NAME, getExceptionMessage(e));
+    return new DirectoryException(DirectoryServer.getServerErrorResultCode(), message, e);
+  }
+
+  private static byte[] concatenateHashPlusSalt(byte[] saltBytes, byte[] digestBytes) {
+    final byte[] hashPlusSalt = new byte[digestBytes.length + NUM_SALT_BYTES];
     System.arraycopy(digestBytes, 0, hashPlusSalt, 0, digestBytes.length);
-    System.arraycopy(saltBytes, 0, hashPlusSalt, digestBytes.length,
-                     NUM_SALT_BYTES);
-
-    return "{" + STORAGE_SCHEME_NAME_PBKDF2 + "}" + iterations + ":" +
-      Base64.encode(hashPlusSalt);
+    System.arraycopy(saltBytes, 0, hashPlusSalt, digestBytes.length, NUM_SALT_BYTES);
+    return hashPlusSalt;
   }
 
 }
