@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 
 package org.opends.quicksetup.installer;
@@ -1172,14 +1172,8 @@ public class InstallerHelper {
     }
 
     // Launch the script
-    String[] args =
-    {
-        "--propertiesFile", propertiesFile,
-        "--destinationFile", destinationFile,
-        "--quiet"
-    };
-
-    int returnValue = JavaPropertiesTool.mainCLI(args);
+    int returnValue = JavaPropertiesTool.mainCLI(
+        "--propertiesFile", propertiesFile, "--destinationFile", destinationFile, "--quiet");
 
     if ((returnValue !=
       JavaPropertiesTool.ErrorReturnCode.SUCCESSFUL.getReturnCode()) &&

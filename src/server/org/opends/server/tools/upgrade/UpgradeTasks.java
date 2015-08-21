@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2013 ForgeRock AS
+ *      Copyright 2013-2015 ForgeRock AS
  */
 
 package org.opends.server.tools.upgrade;
@@ -51,6 +51,7 @@ import org.forgerock.opendj.ldap.Filter;
 import org.forgerock.opendj.ldap.schema.UnknownSchemaElementException;
 import org.opends.messages.Message;
 import org.opends.server.tools.ClientException;
+import org.opends.server.tools.JavaPropertiesTool;
 import org.opends.server.tools.RebuildIndex;
 import org.opends.server.util.BuildVersion;
 import org.opends.server.util.ChangeOperationType;
@@ -370,6 +371,38 @@ public final class UpgradeTasks
         {
           manageTaskException(context, ERR_UPGRADE_ADDOBJECTCLASS_FAILS.get(
               schemaFileTemplate.getName(), e.getMessage()), pnc);
+        }
+      }
+    };
+  }
+
+  /**
+   * Re-run the dsjavaproperties tool to rewrite the set-java-home script/batch file.
+   *
+   * @param summary
+   *          The summary of the task.
+   * @return An upgrade task which runs dsjavaproperties.
+   */
+  public static UpgradeTask rerunJavaPropertiesTool(final Message summary)
+  {
+    return new AbstractUpgradeTask()
+    {
+      @Override
+      public void perform(UpgradeContext context) throws ClientException
+      {
+        LOG.log(Level.INFO, summary.toString());
+
+        final ProgressNotificationCallback pnc = new ProgressNotificationCallback(0, summary, 50);
+        context.notifyProgress(pnc);
+
+        int returnValue = JavaPropertiesTool.mainCLI("--quiet");
+        context.notifyProgress(pnc.setProgress(100));
+
+        if (JavaPropertiesTool.ErrorReturnCode.SUCCESSFUL.getReturnCode() != returnValue ||
+                JavaPropertiesTool.ErrorReturnCode.SUCCESSFUL_NOP.getReturnCode() != returnValue)
+        {
+          final Message message = ERR_UPGRADE_DSJAVAPROPERTIES_FAILED.get();
+          throw new ClientException(EXIT_CODE_ERROR, message);
         }
       }
     };

@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2014 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 
 package org.opends.server.tools;
@@ -150,7 +150,7 @@ public class JavaPropertiesTool extends ConsoleApplication
    * @return The error code.
    */
 
-  public static int mainCLI(String[] args)
+  public static int mainCLI(String... args)
   {
     return mainCLI(args, System.out, System.err, System.in);
   }
