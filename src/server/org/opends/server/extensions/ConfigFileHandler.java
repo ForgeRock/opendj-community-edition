@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2012 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.extensions;
 
@@ -2013,6 +2013,7 @@ public class ConfigFileHandler
 
           FileInputStream  inputStream  = new FileInputStream(existingCfg);
           FileOutputStream outputStream = new FileOutputStream(newConfigFile);
+          FilePermission.setSafePermissions(newConfigFile, 0600);
           byte[] buffer = new byte[8192];
           while (true)
           {
@@ -2213,7 +2214,7 @@ public class ConfigFileHandler
     {
       inputStream  = new FileInputStream(configFile);
       outputStream = new GZIPOutputStream(new FileOutputStream(archiveFile));
-
+      FilePermission.setSafePermissions(archiveFile, 0600);
       int bytesRead = inputStream.read(buffer);
       while (bytesRead > 0)
       {
@@ -2317,7 +2318,7 @@ public class ConfigFileHandler
       try
       {
         outputStream = new FileOutputStream(tempFilePath, false);
-
+        FilePermission.setSafePermissions(tempFile, 0600);
         try
         {
           byte[] buffer = new byte[8192];
