@@ -1255,7 +1255,7 @@ public final class DirectoryServer
 
 
       logError(NOTE_DIRECTORY_SERVER_STARTING.get(getVersionString(),
-                                                  BUILD_ID, REVISION_NUMBER));
+                                                  BUILD_ID, REVISION));
 
       // Acquire an exclusive lock for the Directory Server process.
       if (! serverLocked)
@@ -10054,7 +10054,7 @@ public final class DirectoryServer
       System.out.println(SetupUtils.BUILD_NUMBER+separator+
                      new DecimalFormat("000").format(BUILD_NUMBER));
     }
-    System.out.println(SetupUtils.REVISION_NUMBER+separator+REVISION_NUMBER);
+    System.out.println(SetupUtils.REVISION+separator+REVISION);
     System.out.println(SetupUtils.URL_REPOSITORY+separator+URL_REPOSITORY);
     System.out.println(SetupUtils.FIX_IDS+separator+FIX_IDS);
     System.out.println(SetupUtils.DEBUG_BUILD+separator+DEBUG_BUILD);

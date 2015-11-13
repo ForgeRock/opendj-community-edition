@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.util;
 
@@ -123,12 +123,12 @@ public final class DynamicConstants
   public static boolean DEBUG_BUILD = ${DEBUG_BUILD};
 
   /**
-   * The Subversion revision number on which this build is based.
+   * The revision on which this build is based.
    */
-  public static long REVISION_NUMBER = ${REVISION_NUMBER};
+  public static String REVISION = "${REVISION_NUMBER}";
 
   /**
-   * The Subversion url repository location on which this build is based.
+   * The VCS url repository location on which this build is based.
    */
   public static String URL_REPOSITORY =
      "${URL_REPOSITORY}";
@@ -244,7 +244,7 @@ public final class DynamicConstants
         }
         catch (Exception ex) {}
         try{
-         REVISION_NUMBER = (Long)c.getField("REVISION_NUMBER").get(obj);
+         REVISION = (String)c.getField("REVISION_NUMBER").get(obj);
         }
         catch (Exception ex) {}
         try{

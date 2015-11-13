@@ -31,7 +31,7 @@ package org.opends.server.backends.jeb.importLDIF;
 import static org.opends.messages.JebMessages.*;
 import static org.opends.server.loggers.ErrorLogger.logError;
 import static org.opends.server.util.DynamicConstants.BUILD_ID;
-import static org.opends.server.util.DynamicConstants.REVISION_NUMBER;
+import static org.opends.server.util.DynamicConstants.REVISION;
 import static org.opends.server.util.ServerConstants.*;
 import static org.opends.server.util.StaticUtils.getFileForPath;
 
@@ -916,7 +916,7 @@ public final class Importer implements DiskSpaceMonitorHandler
     {
       Message message =
           NOTE_JEB_IMPORT_STARTING.get(DirectoryServer.getVersionString(),
-              BUILD_ID, REVISION_NUMBER);
+              BUILD_ID, REVISION);
       logError(message);
       message = NOTE_JEB_IMPORT_THREAD_COUNT.get(threadCount);
       logError(message);

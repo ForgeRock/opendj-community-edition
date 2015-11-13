@@ -177,7 +177,7 @@
   <property name="snmp.src.dir"      location="src/snmp/src" />
   <property name="snmp.classes.dir"
             location="${classes.dir}/org/opends/server/snmp" />
- 
+
 
   <!-- Properties for license inclusion. -->
   <condition property="include.license.file">
@@ -574,33 +574,13 @@ Please:
 
   <!-- Build the DynamicConstants.java file and any of its dependencies. -->
   <target name="dynamicconstants" depends="init,buildtools">
-    <!-- Get the revision number of the current Subversion workspace -->
-    <taskdef name="getsvnrevision"
-             classname="org.opends.build.tools.GetSubversionRevision">
-      <classpath>
-        <fileset dir="${build.dir}/build-tools">
-          <include name="*.jar" />
-        </fileset>
-        <fileset dir="${svnkit.dir}">
-          <include name="*.jar" />
-        </fileset>
-      </classpath>
-    </taskdef>
-
-    <property name="REVISION_NUMBER" value="12667" />
-
-    <!-- Get the url repo of the current Subversion workspace -->
-    <taskdef name="getsvnurlrepo"
-             classname="org.opends.build.tools.GetSubversionUrlRepo">
-      <classpath>
-        <fileset dir="${build.dir}/build-tools">
-          <include name="*.jar" />
-        </fileset>
-        <fileset dir="${svnkit.dir}">
-          <include name="*.jar" />
-        </fileset>
-      </classpath>
-    </taskdef>
+    <!-- Get the revision of the current VCS workspace -->
+    <echo message="Getting revision number from git"/>
+    <exec executable="git" outputproperty="REVISION_NUMBER"
+          failifexecutionfails="false">
+      <arg value="rev-parse"/>
+      <arg value="HEAD"/>
+    </exec>
 
     <property name="URL_REPOSITORY" value="ssh://git@stash.forgerock.org:7999/opendj/opendj.git" />
 
@@ -645,23 +625,10 @@ Please:
 
 
 
-  <!-- Check modified files to see if any svn:eol-style or copyright updates
-       are needed. -->
+  <!-- Check modified files to see if any copyright updates are needed. -->
   <target name="checkprecommit" depends="buildtools"
-       description="Ensure updated files eol-style and copyright info">
-    <taskdef name="checkprecommit"
-             classname="org.opends.build.tools.CheckPrecommit">
-      <classpath>
-        <fileset dir="${build.dir}/build-tools">
-          <include name="*.jar" />
-        </fileset>
-        <fileset dir="${svnkit.dir}">
-          <include name="*.jar" />
-        </fileset>
-      </classpath>
-    </taskdef>
-
-    <checkprecommit />
+       description="Ensure updated files copyright info">
+    <echo message="checkprecommit is not functional"/>
   </target>
 
 
@@ -985,7 +952,7 @@ Please:
 
     <!-- Regenerate example plugin. -->
     <antcall target="example-plugin" />
-    
+
     <!-- Copy license if required. -->
     <antcall target="copylicense" />
   </target>
@@ -1032,18 +999,18 @@ Please:
       <jvmarg value="-DLdapMapping"/>
     </java>
   </target>
-  
+
   <!-- Create license file if requested.
-         
+
        This target should only be called from targets which have defined the
        pdir property, such as prepackage and rebuild.
-         
+
        The license file will be copied to ${pdir}/Legal/license_to_accept.txt.
        This file location is hard-coded in the following classes:
-         
+
        org.opends.server.tools.upgrade.LicenseFile
        org.opends.quicksetup.LicenseFile
-         
+
        Care must be taken to keep these filenames synchronized.
   -->
   <target name="copylicense" if="include.license.file" >
@@ -2526,15 +2493,15 @@ Please:
   <target name="srczip" depends="generateadmin"
        description="Generate a src.zip file with all the server source.">
     <zip destfile="${build.dir}/src.zip">
-      <zipfileset dir="${src.dir}" excludes="**/.svn" filemode="644"
+      <zipfileset dir="${src.dir}" excludes="**/.git" filemode="644"
            dirmode="755" />
-      <zipfileset dir="${admin.src.dir}" excludes="**/.svn" filemode="644"
+      <zipfileset dir="${admin.src.dir}" excludes="**/.git" filemode="644"
            dirmode="755" />
-      <zipfileset dir="${ads.src.dir}" excludes="**/.svn" filemode="644"
+      <zipfileset dir="${ads.src.dir}" excludes="**/.git" filemode="644"
            dirmode="755" />
-      <zipfileset dir="${quicksetup.src.dir}" excludes="**/.svn" filemode="644"
+      <zipfileset dir="${quicksetup.src.dir}" excludes="**/.git" filemode="644"
            dirmode="755" />
-      <zipfileset dir="${guitools.src.dir}" excludes="**/.svn" filemode="644"
+      <zipfileset dir="${guitools.src.dir}" excludes="**/.git" filemode="644"
            dirmode="755" />
     </zip>
   </target>

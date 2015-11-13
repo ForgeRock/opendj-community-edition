@@ -101,7 +101,7 @@ public final class Upgrade
   static
   {
     // @formatter:off
-    register("2.5.0.6869",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_6869_SUMMARY.get(),
         "(objectClass=ds-cfg-collation-matching-rule)",
         "add: ds-cfg-collation",
@@ -112,7 +112,7 @@ public final class Upgrade
         "ds-cfg-collation: de:1.3.6.1.4.1.142.2.27.9.4.28.1",
         "ds-cfg-collation: de-DE:1.3.6.1.4.1.142.2.27.9.4.28.1"));
 
-    register("2.5.0.7192",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_7192_SUMMARY.get(),
         "(objectClass=ds-cfg-password-policy)",
         "add: objectClass",
@@ -121,7 +121,7 @@ public final class Upgrade
         "add: ds-cfg-java-class",
         "ds-cfg-java-class: org.opends.server.core.PasswordPolicyFactory"));
 
-    register("2.5.0.7364",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_7364_SUMMARY.get(),
         "(ds-cfg-java-class=org.opends.server.loggers.TextAuditLogPublisher)",
         "add: objectClass",
@@ -130,10 +130,10 @@ public final class Upgrade
         "delete: objectClass",
         "objectClass: ds-cfg-file-based-access-log-publisher"));
 
-    register ("2.5.0.7466",
+    register ("2.5.0",
         renameSnmpSecurityConfig(INFO_UPGRADE_TASK_7466_SUMMARY.get()));
 
-    register("2.5.0.7748",
+    register("2.5.0",
         newAttributeTypes(INFO_UPGRADE_TASK_7748_1_SUMMARY.get(),
         "00-core.ldif", "etag"),
         addConfigEntry(INFO_UPGRADE_TASK_7748_2_SUMMARY.get(),
@@ -151,7 +151,7 @@ public final class Upgrade
         "ds-cfg-checksum-algorithm: adler-32",
         "ds-cfg-excluded-attribute: ds-sync-hist"));
 
-    register("2.5.0.7834",
+    register("2.5.0",
         addConfigEntry(INFO_UPGRADE_TASK_7834_SUMMARY.get(),
         "dn: cn=Password Expiration Time,cn=Virtual Attributes,cn=config",
         "changetype: add",
@@ -165,7 +165,7 @@ public final class Upgrade
         "ds-cfg-attribute-type: ds-pwp-password-expiration-time",
         "ds-cfg-conflict-behavior: virtual-overrides-real"));
 
-    register("2.5.0.7979",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_7979_SUMMARY.get(),
         "(ds-cfg-java-class=org.opends.server.schema.CertificateSyntax)",
         "add: objectClass",
@@ -174,7 +174,7 @@ public final class Upgrade
         "add: ds-cfg-strict-format",
         "ds-cfg-strict-format: false"));
 
-    register("2.5.0.8124",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_8124_SUMMARY.get(),
         "(ds-cfg-java-class=org.opends.server.schema.JPEGSyntax)",
         "add: objectClass",
@@ -183,7 +183,7 @@ public final class Upgrade
         "add: ds-cfg-strict-format",
         "ds-cfg-strict-format: false"));
 
-    register("2.5.0.8133",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_8133_SUMMARY.get(),
         "(ds-cfg-java-class=org.opends.server.schema.CountryStringSyntax)",
         "add: objectClass",
@@ -192,7 +192,7 @@ public final class Upgrade
         "add: ds-cfg-strict-format",
         "ds-cfg-strict-format: false"));
 
-    register("2.5.0.8214",
+    register("2.5.0",
         modifyConfigEntryOptional(INFO_UPGRADE_TASK_8214_SUMMARY.get(),
         INFO_UPGRADE_TASK_8214_DESCRIPTION.get(),
         "(ds-cfg-java-class=org.opends.server.extensions."
@@ -204,19 +204,19 @@ public final class Upgrade
         "delete: ds-cfg-filter",
         "ds-cfg-filter: (objectClass=person)"));
 
-    register("2.5.0.8387",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_8387_SUMMARY.get(),
         "(objectClass=ds-cfg-dictionary-password-validator)",
         "add: ds-cfg-check-substrings",
         "ds-cfg-check-substrings: false"));
 
-    register("2.5.0.8389",
+    register("2.5.0",
         modifyConfigEntry(INFO_UPGRADE_TASK_8389_SUMMARY.get(),
         "(objectClass=ds-cfg-attribute-value-password-validator)",
         "add: ds-cfg-check-substrings",
         "ds-cfg-check-substrings: false"));
 
-    register("2.5.0.8487",
+    register("2.5.0",
         addConfigEntry(INFO_UPGRADE_TASK_8487_SUMMARY.get(),
         "dn: cn=PBKDF2,cn=Password Storage Schemes,cn=config",
         "changetype: add",
@@ -228,7 +228,7 @@ public final class Upgrade
             + "PBKDF2PasswordStorageScheme",
         "ds-cfg-enabled: true"));
 
-    register("2.5.0.8613",
+    register("2.5.0",
         addConfigFile("http-config.json"),
         addConfigEntry(INFO_UPGRADE_TASK_8613_SUMMARY.get(),
         "dn: cn=HTTP Connection Handler,cn=Connection Handlers,cn=config",
@@ -256,7 +256,7 @@ public final class Upgrade
         "ds-cfg-use-ssl: false",
         "ds-cfg-enabled: false"));
 
-    register("2.5.0.8832", addConfigEntry(INFO_UPGRADE_TASK_8832_SUMMARY.get(),
+    register("2.5.0", addConfigEntry(INFO_UPGRADE_TASK_8832_SUMMARY.get(),
         "dn: cn=File-Based HTTP Access Logger,cn=Loggers,cn=config",
         "changetype: add",
         "objectClass: ds-cfg-file-based-http-access-log-publisher",
@@ -278,7 +278,7 @@ public final class Upgrade
         "ds-cfg-log-file-permissions: 640",
         "ds-cfg-enabled: false"));
 
-    register("2.5.0.8985",
+    register("2.5.0",
         newAttributeTypes(INFO_UPGRADE_TASK_8985_1_SUMMARY.get(),
         "00-core.ldif", "emailAddress"),
         modifyConfigEntry(INFO_UPGRADE_TASK_8985_2_SUMMARY.get(),
@@ -292,17 +292,17 @@ public final class Upgrade
         "ds-cfg-subject-attribute-mapping: emailAddress:mail"));
 
     /* See OPENDJ-992 */
-    register("2.5.0.9013",
+    register("2.5.0",
         regressionInVersion("2.5.0.7640",
             rebuildSingleIndex(INFO_UPGRADE_TASK_9013_DESCRIPTION.get(),
                 "ds-sync-hist")));
 
     /** See OPENDJ-1295 */
-    register("2.6.1.10245",
+    register("2.6.1",
         copySchemaFile("03-pwpolicyextension.ldif"));
 
     /** See OPENDJ-1067 and OPENDJ-1322 */
-    register("2.6.1.9216",
+    register("2.6.1",
             rerunJavaPropertiesTool(INFO_UPGRADE_TASK_9216_SUMMARY.get()));
 
     /*

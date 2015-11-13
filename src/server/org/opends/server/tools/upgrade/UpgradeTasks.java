@@ -742,7 +742,7 @@ public final class UpgradeTasks
         try
         {
           updateConfigUpgradeSchemaFile(configSchemaDirectory, String
-              .valueOf(context.getToVersion().getRevisionNumber()));
+              .valueOf(context.getToVersion().getRevision()));
 
           context.notifyProgress(pnc.setProgress(100));
         }

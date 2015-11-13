@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2007-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2012 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 
 package org.opends.server.util;
@@ -496,20 +496,19 @@ public final class VersionCompatibilityIssue {
 
   static
   {
-    register(Cause.DS_SYNC_HIST_NORMALIZATION_CHANGE_1, new BuildVersion(2, 4,
-        5, 7635));
-    register (Cause.REVERT_NOT_SUPPORTED_1, new BuildVersion(2,0,0,5278));
+    register(Cause.DS_SYNC_HIST_NORMALIZATION_CHANGE_1, new BuildVersion(2, 4, 5));
+    register (Cause.REVERT_NOT_SUPPORTED_1, new BuildVersion(2,0,0));
     register(Cause.STRINGPREP_NORMALIZATION_CHANGE_1,
-            new BuildVersion(1,2,0,5134));
-    register(Cause.DN_NORMALIZATION_CHANGE_1, new BuildVersion(1, 0, 0, 3873));
+            new BuildVersion(1,2,0));
+    register(Cause.DN_NORMALIZATION_CHANGE_1, new BuildVersion(1, 0, 0));
     register(Cause.BACKEND_CONFIGURATION_CHANGE_1,
-        new BuildVersion(1, 0, 0, 3708));
+        new BuildVersion(1, 0, 0));
     register(Cause.REPLICATION_SECURITY_CHANGE_1,
-        new BuildVersion(1, 0, 0, 3294));
-    register(Cause.PROPERTY_CHANGE_1, new BuildVersion(1, 0, 0, 3053));
-    register(Cause.DB_FORMAT_CHANGE_2, new BuildVersion(0, 9, 0, 2049));
-    register(Cause.DB_FORMAT_CHANGE_1, new BuildVersion(0, 1, 0, 1582));
-    register(Cause.BERKLEY_UPGRADE_1, new BuildVersion(0, 1, 0, 890));
+        new BuildVersion(1, 0, 0));
+    register(Cause.PROPERTY_CHANGE_1, new BuildVersion(1, 0, 0));
+    register(Cause.DB_FORMAT_CHANGE_2, new BuildVersion(0, 9, 0));
+    register(Cause.DB_FORMAT_CHANGE_1, new BuildVersion(0, 1, 0));
+    register(Cause.BERKLEY_UPGRADE_1, new BuildVersion(0, 1, 0));
   }
 
   static private void register(Cause cause,
@@ -556,7 +555,7 @@ public final class VersionCompatibilityIssue {
         boolean isUpgrade = neu.compareTo(current) >= 0;
         BuildVersion currentVersion = new BuildVersion(
             current.getMajorVersion(), current.getMinorVersion(),
-            current.getPointVersion(), current.getRevisionNumber());
+            current.getPointVersion());
         if (isUpgrade)
         {
           // If the currentVersion is newer than the issue described, then there

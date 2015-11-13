@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 
 package org.opends.quicksetup;
@@ -150,7 +150,7 @@ public class BuildInformation implements Comparable<BuildInformation> {
                 MAJOR_VERSION,
                 MINOR_VERSION,
                 POINT_VERSION,
-                REVISION_NUMBER);
+                REVISION);
           }
           catch (Throwable t)
           {
@@ -196,7 +196,7 @@ public class BuildInformation implements Comparable<BuildInformation> {
             MAJOR_VERSION,
             MINOR_VERSION,
             POINT_VERSION,
-            REVISION_NUMBER);
+            REVISION);
 
     return bi;
   }
@@ -220,7 +220,7 @@ public class BuildInformation implements Comparable<BuildInformation> {
 
     // Allow negative revision number for cases where there is no
     // VCS available.
-    Pattern p = Pattern.compile("((\\d+)\\.(\\d+)\\.(\\d+)\\.(-?\\d+))");
+    Pattern p = Pattern.compile("((\\d+)\\.(\\d+)\\.(\\d+)\\.(-?.+))");
     Matcher m = p.matcher(bn);
     if (!m.matches()) {
       throw new IllegalArgumentException("'" + bn + "' is not a build string");
@@ -230,7 +230,7 @@ public class BuildInformation implements Comparable<BuildInformation> {
       bi.values.put(MAJOR_VERSION, m.group(2));
       bi.values.put(MINOR_VERSION, m.group(3));
       bi.values.put(POINT_VERSION, m.group(4));
-      bi.values.put(REVISION_NUMBER, m.group(5));
+      bi.values.put(REVISION, m.group(5));
     } catch (Exception e) {
       throw new IllegalArgumentException("Error parsing build number " + bn);
     }
@@ -255,8 +255,8 @@ public class BuildInformation implements Comparable<BuildInformation> {
             String.valueOf(DynamicConstants.POINT_VERSION));
     bi.values.put(VERSION_QUALIFIER,
             String.valueOf(DynamicConstants.VERSION_QUALIFIER));
-    bi.values.put(REVISION_NUMBER,
-            String.valueOf(DynamicConstants.REVISION_NUMBER));
+    bi.values.put(REVISION,
+            String.valueOf(DynamicConstants.REVISION));
     bi.values.put(URL_REPOSITORY,
             String.valueOf(DynamicConstants.URL_REPOSITORY));
     bi.values.put(FIX_IDS, DynamicConstants.FIX_IDS);
@@ -275,7 +275,7 @@ public class BuildInformation implements Comparable<BuildInformation> {
             MAJOR_VERSION,
             MINOR_VERSION,
             POINT_VERSION,
-            REVISION_NUMBER);
+            REVISION);
 
     return bi;
   }
@@ -328,12 +328,12 @@ public class BuildInformation implements Comparable<BuildInformation> {
   }
 
   /**
-   * Gets the SVN revision number.
+   * Gets the VCS revision.
    *
-   * @return Integer representing the SVN revision number
+   * @return String representing the VCS revision
    */
-  public Integer getRevisionNumber() {
-    return new Integer(values.get(REVISION_NUMBER));
+  public String getRevision() {
+    return values.get(REVISION);
   }
 
   /**
@@ -362,9 +362,9 @@ public class BuildInformation implements Comparable<BuildInformation> {
     if (getMajorVersion().equals(bi.getMajorVersion())) {
       if (getMinorVersion().equals(bi.getMinorVersion())) {
         if (getPointVersion().equals(bi.getPointVersion())) {
-          if (getRevisionNumber().equals(bi.getRevisionNumber())) {
+          if (getRevision().equals(bi.getRevision())) {
             return 0;
-          } else if (getRevisionNumber() < bi.getRevisionNumber()) {
+          } else if (getRevision().compareTo(bi.getRevision()) < 0) {
             return -1;
           }
         } else if (getPointVersion() < bi.getPointVersion()) {
@@ -398,7 +398,7 @@ public class BuildInformation implements Comparable<BuildInformation> {
     hc = 31 * hc + getMajorVersion().hashCode();
     hc = 31 * hc + getMinorVersion().hashCode();
     hc = 31 * hc + getPointVersion().hashCode();
-    hc = 31 * hc + getRevisionNumber().hashCode();
+    hc = 31 * hc + getRevision().hashCode();
     return hc;
   }
 

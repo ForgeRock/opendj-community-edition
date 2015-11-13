@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2014 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.backends;
 
@@ -413,7 +413,7 @@ public class SchemaBackend
       {
         concatFile = new File(upgradeDirectory,
                               SCHEMA_BASE_FILE_NAME_WITHOUT_REVISION +
-                              DynamicConstants.REVISION_NUMBER);
+                              DynamicConstants.REVISION);
         if (concatFile.exists())
         {
           concatFilePath = concatFile.getAbsolutePath();

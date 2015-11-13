@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.quicksetup;
 
@@ -704,7 +704,7 @@ public final class Installation
   public File getBaseSchemaFile() throws ApplicationException
   {
     return new File(getConfigurationUpgradeDirectory(), "schema.ldif."
-        + getInstanceSvnRev().toString());
+        + getInstanceVCSRevision());
   }
 
 
@@ -721,37 +721,37 @@ public final class Installation
   public File getBaseConfigurationFile() throws ApplicationException
   {
     return new File(getConfigurationUpgradeDirectory(), BASE_CONFIG_FILE_PREFIX
-        + getInstanceSvnRev().toString());
+        + getInstanceVCSRevision());
   }
 
 
 
   /**
-   * Gets the SVN revision number of the build.
+   * Gets the VCS revision of the build.
    *
-   * @return Integer representing the svn number
+   * @return String representing the revision
    * @throws ApplicationException
-   *           if for some reason the number could not be determined
+   *           if for some reason the revision could not be determined
    */
-  public Integer getSvnRev() throws ApplicationException
+  public String getVCSRevision() throws ApplicationException
   {
     BuildInformation bi = getBuildInformation();
-    return bi.getRevisionNumber();
+    return bi.getRevision();
   }
 
 
 
   /**
-   * Gets the SVN revision number of the instance.
+   * Gets the VCS revision of the instance.
    *
-   * @return Integer representing the svn number
+   * @return String representing the revision
    * @throws ApplicationException
-   *           if for some reason the number could not be determined
+   *           if for some reason the revision could not be determined
    */
-  public Integer getInstanceSvnRev() throws ApplicationException
+  public String getInstanceVCSRevision() throws ApplicationException
   {
     BuildInformation bi = getInstanceBuildInformation();
-    return bi.getRevisionNumber();
+    return bi.getRevision();
   }
 
 

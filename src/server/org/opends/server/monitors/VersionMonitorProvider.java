@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
+ *      Portions Copyright 2015 ForgeRock AS
  */
 package org.opends.server.monitors;
 
@@ -204,7 +205,7 @@ public class VersionMonitorProvider
     }
 
     attrs.add(createAttribute(ATTR_REVISION_NUMBER,
-                   String.valueOf(DynamicConstants.REVISION_NUMBER)));
+                   String.valueOf(DynamicConstants.REVISION)));
     attrs.add(createAttribute(ATTR_BUILD_ID, DynamicConstants.BUILD_ID));
     attrs.add(createAttribute(ATTR_COMPACT_VERSION,
                               DynamicConstants.COMPACT_VERSION_STRING));
