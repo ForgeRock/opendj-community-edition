@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
+ *      Portions copyright 2015 ForgeRock AS
  */
 package org.opends.server.types;
 
@@ -190,6 +191,20 @@ public final class TestRDN extends TypesTestCase {
     assertEquals(rdn.getAttributeType(1), AT_CN);
     assertEquals(rdn.getAttributeName(1), AT_CN.getNameOrOID());
     assertEquals(rdn.getAttributeValue(1), AV_CN);
+  }
+
+
+
+  /**
+   * Test escaping of single space values.
+   *
+   * @throws Exception  If the test failed unexpectedly.
+   */
+  @Test
+  public void testEscaping() {
+    AttributeValue val = AttributeValues.create(AT_DC, ByteString.valueOf(" "));
+    RDN rdn = new RDN(AT_DC, val);
+    assertEquals(rdn.toString(), "dc=\\ ");
   }
 
 

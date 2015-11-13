@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
+ *      Portions copyright 2015 ForgeRock AS
  */
 package org.opends.server.types;
 import org.opends.messages.Message;
@@ -513,6 +514,10 @@ public final class RDN
     if ((c == ' ') || (c == '#')) {
       buffer.append('\\');
       buffer.append(c);
+      if (length == 1)
+      {
+        return buffer.toString();
+      }
       start = 1;
     }
 
