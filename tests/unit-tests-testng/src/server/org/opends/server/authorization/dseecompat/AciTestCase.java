@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2008-2009 Sun Microsystems, Inc.
+ *      Portions copyright 2015 ForgeRock AS
  */
 
 package org.opends.server.authorization.dseecompat;
@@ -211,6 +212,47 @@ public abstract class  AciTestCase extends DirectoryServerTestCase {
            LDAPPasswordModify.mainPasswordModify(argList.toArray(args),
                    false, oStream, oStream);
     Assert.assertEquals(rc, ret,  "Returned error: " + oStream.toString());
+    return oStream.toString();
+  }
+
+  /**
+   * Perform a modify operation, and request attributes via a preRead control.
+   *
+   * @param bindDn        The user to authenticate as.
+   * @param bindPassword  The user's credentials.
+   * @param ldif          The modification to make.
+   * @param attributes    A space-separated list of attributes to return.
+   *
+   * @return  The output of the command.
+   *
+   * @throws Exception  If an unexpected problem occurred.
+   */
+  protected String preReadModify(String bindDn, String bindPassword,
+                                 String ldif, String attributes) throws Exception
+  {
+    File tempFile = getTemporaryLdifFile();
+    TestCaseUtils.writeFile(tempFile, ldif);
+
+    ArrayList<String> argList = new ArrayList<String>(20);
+    argList.add("-h");
+    argList.add("127.0.0.1");
+    argList.add("-p");
+    argList.add(String.valueOf(TestCaseUtils.getServerLdapPort()));
+    argList.add("-D");
+    argList.add(bindDn);
+    argList.add("-w");
+    argList.add(bindPassword);
+    if (attributes != null) {
+      argList.add("--preReadAttributes");
+      argList.add(attributes);
+    }
+    argList.add("-f");
+    argList.add(tempFile.getAbsolutePath());
+    String[] args = new String[argList.size()];
+
+    oStream.reset();
+    int retVal =LDAPModify.mainModify(argList.toArray(args), false, oStream, oStream);
+    Assert.assertEquals(retVal, 0, "Returned error: " + oStream);
     return oStream.toString();
   }
 
@@ -693,22 +735,45 @@ public abstract class  AciTestCase extends DirectoryServerTestCase {
             "ds-privilege-name: proxied-auth");
   }
 
-  protected HashMap<String, String>
-  getAttrMap(String resultString) {
-    StringReader r=new StringReader(resultString);
-    BufferedReader br=new BufferedReader(r);
+  protected HashMap<String, String> getAttrMap(String resultString)
+  {
+    return getAttrMap(resultString, false);
+  }
+
+  /**
+   * Parse a tool output for an LDIF record, returning the attributes in a Map.
+   *
+   * @param resultString The entire output from the operation
+   * @param stripHeader  Set to {@code true} if data before the LDIF needs to be ignored
+   * @return  A map of attribute-values
+   */
+  protected HashMap<String, String> getAttrMap(String resultString, boolean stripHeader)
+  {
+    StringReader r = new StringReader(resultString);
+    BufferedReader br = new BufferedReader(r);
+    boolean stripping = stripHeader;
     HashMap<String, String> attrMap = new HashMap<String,String>();
     try {
-      while(true) {
+      while (true) {
         String s = br.readLine();
-        if(s == null)
+        if (s == null)
+        {
           break;
-        if(s.startsWith("dn:"))
+        }
+        if (stripping)
+        {
+          if (s.startsWith("dn:"))
+          {
+            stripping = false;
+          }
           continue;
-        String[] a=s.split(": ");
+        }
+        String[] a = s.split(": ");
         if(a.length != 2)
+        {
           break;
-        attrMap.put(a[0].toLowerCase(),a[1]);
+        }
+        attrMap.put(a[0].toLowerCase(), a[1]);
       }
     } catch (IOException e) {
       Assert.assertEquals(0, 1,  e.getMessage());
