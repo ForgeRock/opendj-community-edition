@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2007-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2013 ForgeRock AS
+ *      Portions Copyright 2013-2015 ForgeRock AS
  */
 package org.opends.server.backends.jeb;
 
@@ -1124,7 +1124,7 @@ public class BackendImpl
       envConfig.setDurability(Durability.COMMIT_NO_SYNC);
       envConfig.setLockTimeout(0, TimeUnit.SECONDS);
       envConfig.setTxnTimeout(0, TimeUnit.SECONDS);
-      envConfig.setConfigParam(EnvironmentConfig.CLEANER_MIN_FILE_UTILIZATION,
+      envConfig.setConfigParam(EnvironmentConfig.CLEANER_MIN_UTILIZATION,
           String.valueOf(cfg.getDBCleanerMinUtilization()));
       envConfig.setConfigParam(EnvironmentConfig.LOG_FILE_MAX, String
           .valueOf(cfg.getDBLogFileMax()));
@@ -1360,7 +1360,7 @@ public class BackendImpl
         envConfig.setLockTimeout(0, TimeUnit.SECONDS);
         envConfig.setTxnTimeout(0, TimeUnit.SECONDS);
         envConfig.setConfigParam(
-            EnvironmentConfig.CLEANER_MIN_FILE_UTILIZATION, String.valueOf(cfg
+            EnvironmentConfig.CLEANER_MIN_UTILIZATION, String.valueOf(cfg
                 .getDBCleanerMinUtilization()));
         envConfig.setConfigParam(EnvironmentConfig.LOG_FILE_MAX, String
             .valueOf(cfg.getDBLogFileMax()));
