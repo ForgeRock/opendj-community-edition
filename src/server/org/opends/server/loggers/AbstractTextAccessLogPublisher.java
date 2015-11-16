@@ -22,7 +22,7 @@
  * CDDL HEADER END
  *
  *
- *      Copyright 2011-2013 ForgeRock AS
+ *      Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.loggers;
 
@@ -512,30 +512,36 @@ public abstract class AbstractTextAccessLogPublisher
         }
       }
 
-      if (targetDNNotEqualTo.length > 0)
+      return filterDN(targetDN, targetDNNotEqualTo, targetDNEqualTo);
+    }
+
+    private boolean filterDN(final DN dn, PatternDN[] notEqualTo,
+        PatternDN[] equalTo)
+    {
+      if (notEqualTo.length > 0)
       {
-        for (final PatternDN pattern : targetDNNotEqualTo)
+        for (final PatternDN pattern : notEqualTo)
         {
-          if (pattern.matchesDN(targetDN))
+          if (pattern.matchesDN(dn))
           {
             return false;
           }
         }
       }
 
-      if (targetDNEqualTo.length > 0)
+      if (equalTo.length > 0)
       {
-        for (final PatternDN pattern : targetDNEqualTo)
+        for (final PatternDN pattern : equalTo)
         {
-          if (pattern.matchesDN(targetDN))
+          if (pattern.matchesDN(dn))
           {
             return true;
           }
         }
+        return false;
       }
 
-      // The target DN did not match.
-      return false;
+      return true;
     }
 
 
@@ -545,26 +551,22 @@ public abstract class AbstractTextAccessLogPublisher
       // Check response code.
       final Integer resultCode = operation.getResultCode().getIntValue();
 
-      if (!cfg.getResponseResultCodeNotEqualTo().isEmpty())
+      if (!cfg.getResponseResultCodeNotEqualTo().isEmpty()
+          && cfg.getResponseResultCodeNotEqualTo().contains(resultCode))
       {
-        if (cfg.getResponseResultCodeNotEqualTo().contains(resultCode))
-        {
-          return false;
-        }
+        return false;
       }
 
-      if (!cfg.getResponseResultCodeEqualTo().isEmpty())
+      if (!cfg.getResponseResultCodeEqualTo().isEmpty()
+          && !cfg.getResponseResultCodeEqualTo().contains(resultCode))
       {
-        if (!cfg.getResponseResultCodeNotEqualTo().contains(resultCode))
-        {
-          return false;
-        }
+        return false;
       }
 
       // Check etime.
       final long etime = operation.getProcessingTime();
 
-      final Integer etimeGT = cfg.getResponseEtimeLessThan();
+      final Integer etimeGT = cfg.getResponseEtimeGreaterThan();
       if (etimeGT != null)
       {
         if (etime <= ((long) etimeGT))
@@ -677,30 +679,7 @@ public abstract class AbstractTextAccessLogPublisher
         return userDNEqualTo.length == 0;
       }
 
-      if (userDNNotEqualTo.length > 0)
-      {
-        for (final PatternDN pattern : userDNNotEqualTo)
-        {
-          if (pattern.matchesDN(userDN))
-          {
-            return false;
-          }
-        }
-      }
-
-      if (userDNEqualTo.length > 0)
-      {
-        for (final PatternDN pattern : userDNEqualTo)
-        {
-          if (pattern.matchesDN(userDN))
-          {
-            return true;
-          }
-        }
-      }
-
-      // The user DN did not match.
-      return false;
+      return filterDN(userDN, userDNNotEqualTo, userDNEqualTo);
     }
 
 
@@ -759,10 +738,10 @@ public abstract class AbstractTextAccessLogPublisher
             }
           }
         }
+        return false;
       }
 
-      // The user entry did not match.
-      return false;
+      return true;
     }
 
   }
