@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2013 ForgeRock AS
+ *      Portions Copyright 2011-2015 ForgeRock AS
  */
 package org.opends.server.core;
 
@@ -46,6 +46,7 @@ public class SynchronousStrategy implements QueueingStrategy {
    */
   @Override
   public void enqueueRequest(Operation operation) throws DirectoryException {
+    DirectoryServer.checkCanEnqueueRequest(operation, true);
     operation.run();
     operation.operationCompleted();
   }

@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2010-2013 ForgeRock AS.
+ *      Portions Copyright 2010-2015 ForgeRock AS.
  */
 package org.opends.server.core;
 
@@ -7303,19 +7303,21 @@ public final class DirectoryServer
    *
    * @param operation
    *          The operation to be added to the work queue.
+   * @param isAllowedInLockDownMode
+   *          Flag to indicate if the request can be added to the work queue regardless
+   *          of the server's lock down mode.
    * @throws DirectoryException
    *           If a check failed preventing the operation from being added to
    *           the queue
    */
-  private static void checkCanEnqueueRequest(Operation operation)
+  public static void checkCanEnqueueRequest(Operation operation, boolean isAllowedInLockDownMode)
          throws DirectoryException
   {
     ClientConnection clientConnection = operation.getClientConnection();
-    //Reject or accept the unauthenticated requests based on the configuration
-    // settings.
-    if ((directoryServer.rejectUnauthenticatedRequests ||
-         directoryServer.lockdownMode) &&
-        !clientConnection.getAuthenticationInfo().isAuthenticated())
+    //Reject or accept the unauthenticated requests based on the configuration settings.
+    if (!clientConnection.getAuthenticationInfo().isAuthenticated() &&
+        (directoryServer.rejectUnauthenticatedRequests ||
+        (directoryServer.lockdownMode && !isAllowedInLockDownMode)))
     {
       switch(operation.getOperationType())
       {
@@ -7445,7 +7447,7 @@ public final class DirectoryServer
   public static void enqueueRequest(Operation operation)
       throws DirectoryException
   {
-    checkCanEnqueueRequest(operation);
+    checkCanEnqueueRequest(operation, false);
     directoryServer.workQueue.submitOperation(operation);
   }
 
@@ -7463,7 +7465,7 @@ public final class DirectoryServer
   public static boolean tryEnqueueRequest(Operation operation)
       throws DirectoryException
   {
-    checkCanEnqueueRequest(operation);
+    checkCanEnqueueRequest(operation, false);
     return directoryServer.workQueue.trySubmitOperation(operation);
   }
 
