@@ -652,7 +652,7 @@ public class GroupManager extends InternalDirectoryServerPlugin
    * all group instances that it may contain and register them with this group
    * manager.
    */
-  public void performBackendInitializationProcessing(Backend backend)
+  public void performBackendPreInitializationProcessing(Backend backend)
   {
     InternalClientConnection conn =
          InternalClientConnection.getRootConnection();
@@ -767,7 +767,7 @@ public class GroupManager extends InternalDirectoryServerPlugin
    * {@inheritDoc}  In this case, the server will de-register all group
    * instances associated with entries in the provided backend.
    */
-  public void performBackendFinalizationProcessing(Backend backend)
+  public void performBackendPostFinalizationProcessing(Backend backend)
   {
     lock.writeLock().lock();
     try
@@ -790,7 +790,19 @@ public class GroupManager extends InternalDirectoryServerPlugin
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  public void performBackendPostInitializationProcessing(Backend backend) {
+    // Nothing to do.
+  }
 
+  /**
+   * {@inheritDoc}
+   */
+  public void performBackendPreFinalizationProcessing(Backend backend) {
+    // Nothing to do.
+  }
 
   /**
    * In this case, each entry is checked to see if it contains

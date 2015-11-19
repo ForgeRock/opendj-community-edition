@@ -323,7 +323,7 @@ public class BackendConfigManager implements
         for (BackendInitializationListener listener :
              DirectoryServer.getBackendInitializationListeners())
         {
-          listener.performBackendInitializationProcessing(backend);
+          listener.performBackendPreInitializationProcessing(backend);
         }
 
 
@@ -343,6 +343,11 @@ public class BackendConfigManager implements
               backendID, getExceptionMessage(e));
           logError(message);
           // FIXME -- Do we need to send an admin alert?
+        }
+
+        for (BackendInitializationListener listener : DirectoryServer.getBackendInitializationListeners())
+        {
+          listener.performBackendPostInitializationProcessing(backend);
         }
 
 
@@ -526,12 +531,18 @@ public class BackendConfigManager implements
           // It isn't disabled, so we will do so now and deregister it from the
           // Directory Server.
           registeredBackends.remove(backendDN);
+
+          for (BackendInitializationListener listener : DirectoryServer.getBackendInitializationListeners())
+          {
+            listener.performBackendPreFinalizationProcessing(backend);
+          }
+
           DirectoryServer.deregisterBackend(backend);
 
           for (BackendInitializationListener listener :
                DirectoryServer.getBackendInitializationListeners())
           {
-            listener.performBackendFinalizationProcessing(backend);
+            listener.performBackendPostFinalizationProcessing(backend);
           }
 
           backend.finalizeBackend();
@@ -796,7 +807,7 @@ public class BackendConfigManager implements
       for (BackendInitializationListener listener :
            DirectoryServer.getBackendInitializationListeners())
       {
-        listener.performBackendInitializationProcessing(backend);
+        listener.performBackendPreInitializationProcessing(backend);
       }
 
 
@@ -825,6 +836,10 @@ public class BackendConfigManager implements
                                       messages);
       }
 
+      for (BackendInitializationListener listener : DirectoryServer.getBackendInitializationListeners())
+      {
+        listener.performBackendPostInitializationProcessing(backend);
+      }
 
       registeredBackends.put(backendDN, backend);
     }
@@ -1129,7 +1144,7 @@ public class BackendConfigManager implements
     for (BackendInitializationListener listener :
          DirectoryServer.getBackendInitializationListeners())
     {
-      listener.performBackendInitializationProcessing(backend);
+      listener.performBackendPreInitializationProcessing(backend);
     }
 
 
@@ -1157,6 +1172,11 @@ public class BackendConfigManager implements
 
       return new ConfigChangeResult(resultCode, adminActionRequired,
                                     messages);
+    }
+
+    for (BackendInitializationListener listener : DirectoryServer.getBackendInitializationListeners())
+    {
+      listener.performBackendPostInitializationProcessing(backend);
     }
 
     registeredBackends.put(backendDN, backend);
@@ -1228,7 +1248,20 @@ public class BackendConfigManager implements
     Backend[] subBackends = backend.getSubordinateBackends();
     if ((subBackends == null) || (subBackends.length == 0))
     {
+      for (BackendInitializationListener listener :
+              DirectoryServer.getBackendInitializationListeners())
+      {
+        listener.performBackendPreFinalizationProcessing(backend);
+      }
+
       registeredBackends.remove(backendDN);
+
+      DirectoryServer.deregisterBackend(backend);
+
+      for (BackendInitializationListener listener : DirectoryServer.getBackendInitializationListeners())
+      {
+        listener.performBackendPostFinalizationProcessing(backend);
+      }
 
       try
       {
@@ -1242,13 +1275,6 @@ public class BackendConfigManager implements
         }
       }
 
-      for (BackendInitializationListener listener :
-           DirectoryServer.getBackendInitializationListeners())
-      {
-        listener.performBackendFinalizationProcessing(backend);
-      }
-
-      DirectoryServer.deregisterBackend(backend);
       configEntry.removeChangeListener(this);
 
       // Remove the shared lock for this backend.

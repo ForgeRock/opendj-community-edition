@@ -246,7 +246,7 @@ public class CryptoManagerSync
   /**
    * {@inheritDoc}
    */
-  public void performBackendInitializationProcessing(Backend backend)
+  public void performBackendPreInitializationProcessing(Backend backend)
   {
     DN[] baseDNs = backend.getBaseDNs();
     if (baseDNs != null)
@@ -264,7 +264,7 @@ public class CryptoManagerSync
   /**
    * {@inheritDoc}
    */
-  public void performBackendFinalizationProcessing(Backend backend)
+  public void performBackendPostFinalizationProcessing(Backend backend)
   {
     // No implementation required.
   }
@@ -295,6 +295,20 @@ public class CryptoManagerSync
              DirectoryServer.getServerErrorResultCode(), e);
       }
     }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public void performBackendPostInitializationProcessing(Backend backend) {
+    // Nothing to do.
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public void performBackendPreFinalizationProcessing(Backend backend) {
+    // Nothing to do.
   }
 
 

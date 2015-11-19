@@ -1385,9 +1385,8 @@ public final class DirectoryServer
 
       // Now we can initialize both subentry manager and group manager
       // for this backend.
-      subentryManager.performBackendInitializationProcessing(
-              configHandler);
-      groupManager.performBackendInitializationProcessing(configHandler);
+      subentryManager.performBackendPreInitializationProcessing(configHandler);
+      groupManager.performBackendPreInitializationProcessing(configHandler);
 
       // Initialize the access control handler.
       AccessControlConfigManager.getInstance().initializeAccessControl();
@@ -2648,7 +2647,7 @@ public final class DirectoryServer
     // so we need to handle it explicitly.
     // Because subentryManager may depend on the groupManager, let's
     // delay this.
-    // groupManager.performBackendInitializationProcessing(configHandler);
+    // groupManager.performBackendPreInitializationProcessing(configHandler);
   }
 
 
@@ -2854,7 +2853,7 @@ public final class DirectoryServer
       // at this point so we need to handle it explicitly here.
       // However, subentryManager may have dependencies on the
       // groupManager. So lets delay the backend initialization until then.
-      // subentryManager.performBackendInitializationProcessing(
+      // subentryManager.performBackendPreInitializationProcessing(
       //        configHandler);
     }
     catch (DirectoryException de)
@@ -8398,6 +8397,11 @@ public final class DirectoryServer
     {
       try
       {
+        for (BackendInitializationListener listener : getBackendInitializationListeners())
+        {
+          listener.performBackendPreFinalizationProcessing(backend);
+        }
+
         // Deregister all the local backend workflow elements that have been
         // registered with the server.
         LocalBackendWorkflowElement.removeAll();
@@ -8405,7 +8409,7 @@ public final class DirectoryServer
         for (BackendInitializationListener listener :
              directoryServer.backendInitializationListeners)
         {
-          listener.performBackendFinalizationProcessing(backend);
+          listener.performBackendPostFinalizationProcessing(backend);
         }
 
         backend.finalizeBackend();

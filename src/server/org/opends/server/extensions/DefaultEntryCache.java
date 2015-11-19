@@ -480,7 +480,7 @@ public class DefaultEntryCache
    *                  about to be put into service.
    */
   @Override
-  public void performBackendInitializationProcessing(Backend backend)
+  public void performBackendPreInitializationProcessing(Backend backend)
   {
     // Do nothing.
   }
@@ -496,12 +496,29 @@ public class DefaultEntryCache
    *                  and is about to be finalized.
    */
   @Override
-  public void performBackendFinalizationProcessing(Backend backend)
+  public void performBackendPostFinalizationProcessing(Backend backend)
   {
     // Do not clear any backends if the server is shutting down.
     if ( !(DirectoryServer.getInstance().isShuttingDown()) ) {
       clearBackend(backend);
     }
   }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void performBackendPostInitializationProcessing(Backend backend) {
+    // Nothing to do.
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void performBackendPreFinalizationProcessing(Backend backend) {
+    // Nothing to do.
+  }
+
 }
 

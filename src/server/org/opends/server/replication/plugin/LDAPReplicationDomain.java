@@ -59,6 +59,8 @@ import org.opends.server.api.Backend;
 import org.opends.server.api.DirectoryThread;
 import org.opends.server.api.SynchronizationProvider;
 import org.opends.server.backends.jeb.BackendImpl;
+import org.opends.server.api.BackendInitializationListener;
+import org.opends.server.api.ServerShutdownListener;
 import org.opends.server.backends.task.Task;
 import org.opends.server.config.ConfigException;
 import org.opends.server.core.*;
@@ -95,8 +97,33 @@ import org.opends.server.workflowelement.localbackend.*;
  */
 public final class LDAPReplicationDomain extends ReplicationDomain
        implements ConfigurationChangeListener<ReplicationDomainCfg>,
-                  AlertGenerator
+                  AlertGenerator, BackendInitializationListener, ServerShutdownListener
 {
+  /**
+   * Initializing replication for the domain initiates backend finalization/initialization
+   * This flag prevents the Replication Domain to disable/enable itself when
+   * it is the event initiator
+   */
+  private boolean ignoreBackendInitializationEvent;
+
+  private volatile boolean  serverShutdownRequested;
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getShutdownListenerName() {
+    return "LDAPReplicationDomain " + getBaseDN();
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void processServerShutdown(Message reason) {
+    serverShutdownRequested = true;
+  }
+
   /**
    * This class is used in the session establishment phase
    * when no Replication Server with all the local changes has been found
@@ -147,6 +174,47 @@ public final class LDAPReplicationDomain extends ReplicationDomain
         SearchResultReference searchReference) throws DirectoryException
     {
        // Nothing to do.
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void performBackendPreInitializationProcessing(Backend backend) {
+    // Nothing to do
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void performBackendPostFinalizationProcessing(Backend backend) {
+    // Nothing to do
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void performBackendPostInitializationProcessing(Backend backend) {
+    if (!ignoreBackendInitializationEvent
+            && getBackend().getBackendID().equals(backend.getBackendID())) {
+      enable();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void performBackendPreFinalizationProcessing(Backend backend) {
+    // Do not disable itself during a shutdown
+    // And ignore the event if this replica is the event trigger (e.g. importing).
+    if (!ignoreBackendInitializationEvent
+            && !serverShutdownRequested
+            && getBackend().getBackendID().equals(backend.getBackendID())) {
+      disable();
     }
   }
 
@@ -606,6 +674,9 @@ public final class LDAPReplicationDomain extends ReplicationDomain
 
     // register as an AlertGenerator
     DirectoryServer.registerAlertGenerator(this);
+
+    DirectoryServer.registerBackendInitializationListener(this);
+    DirectoryServer.registerShutdownListener(this);
 
     startPublishService(replicationServers, window, heartbeatInterval,
         configuration.getChangetimeHeartbeatInterval(),
@@ -2561,6 +2632,8 @@ public final class LDAPReplicationDomain extends ReplicationDomain
       }
 
       DirectoryServer.deregisterAlertGenerator(this);
+      DirectoryServer.deregisterBackendInitializationListener(this);
+      DirectoryServer.deregisterShutdownListener(this);
 
       // stop the ReplicationDomain
       stopDomain();
@@ -4095,6 +4168,9 @@ private boolean solveNamingConflict(ModifyDNOperation op,
     // Stop saving state
     stateSavingDisabled = true;
 
+    // Prevent the processing of the backend finalisation event as the import will disable the attached backend
+    ignoreBackendInitializationEvent = true;
+
     // FIXME setBackendEnabled should be part of TaskUtils ?
     TaskUtils.disableBackend(backend.getBackendID());
 
@@ -4233,6 +4309,9 @@ private boolean solveNamingConflict(ModifyDNOperation op,
     }
 
     TaskUtils.enableBackend(backend.getBackendID());
+    // Restore the processing of backend finalization events.
+
+    ignoreBackendInitializationEvent = false;
   }
 
   /**

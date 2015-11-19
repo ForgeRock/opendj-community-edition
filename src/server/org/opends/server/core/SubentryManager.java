@@ -309,7 +309,7 @@ public class SubentryManager extends InternalDirectoryServerPlugin
    * {@inheritDoc}  In this case, the server will search the backend to find
    * all subentries that it may contain and register them with this manager.
    */
-  public void performBackendInitializationProcessing(Backend backend)
+  public void performBackendPreInitializationProcessing(Backend backend)
   {
     InternalClientConnection conn =
          InternalClientConnection.getRootConnection();
@@ -641,7 +641,7 @@ public class SubentryManager extends InternalDirectoryServerPlugin
    * {@inheritDoc}  In this case, the server will de-register
    * all subentries associated with the provided backend.
    */
-  public void performBackendFinalizationProcessing(Backend backend)
+  public void performBackendPostFinalizationProcessing(Backend backend)
   {
     lock.writeLock().lock();
     try
@@ -728,6 +728,20 @@ public class SubentryManager extends InternalDirectoryServerPlugin
     {
       lock.writeLock().unlock();
     }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public void performBackendPostInitializationProcessing(Backend backend) {
+    // Nothing to do.
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public void performBackendPreFinalizationProcessing(Backend backend) {
+    // Nothing to do.
   }
 
   private void doPostAdd(Entry entry)
