@@ -22,7 +22,7 @@
   !
   ! CDDL HEADER END
   !
-  !      Copyright 2011-2014 ForgeRock AS
+  !      Copyright 2011-2015 ForgeRock AS
   !    
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -42,7 +42,7 @@
   <artifactId>opendj-server</artifactId>
   <packaging>pom</packaging>
   <name>OpenDJ Directory Server</name>
-  <version>2.6.3</version>
+  <version>2.6.4-SNAPSHOT</version>
   <description>
     OpenDJ is a new LDAPv3 compliant directory service, developed for the Java
     platform, providing a high performance, highly available and secure store
