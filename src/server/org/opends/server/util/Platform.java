@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2009-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2013-2014 ForgeRock AS.
+ *      Portions Copyright 2013-2015 ForgeRock AS.
  */
 
 package org.opends.server.util;
@@ -63,6 +63,17 @@ public final class Platform
   // The two security package prefixes (IBM and SUN).
   private static final String IBM_SEC = "com.ibm.security";
   private static final String SUN_SEC = "sun.security";
+
+  /** System property to use for overriding CertAndKeyGen class location. */
+  public static final String CERTANDKEYGEN_PROVIDER = "org.forgerock.opendj.CertAndKeyGenProvider";
+
+  /** The CertAndKeyGen class is located in different packages depending on JVM environment. */
+  private static final String[] CERTANDKEYGEN_PATHS = new String[] {
+      "sun.security.x509.CertAndKeyGen",          // Oracle/Sun/OpenJDK 6,7
+      "sun.security.tools.keytool.CertAndKeyGen", // Oracle/Sun/OpenJDK 8
+      "com.ibm.security.x509.CertAndKeyGen",      // IBM SDK 7
+      "com.ibm.security.tools.CertAndKeyGen"      // IBM SDK 8
+  };
 
   private static final PlatformIMPL IMPL;
 
@@ -111,18 +122,14 @@ public final class Platform
 
     static
     {
-      String x509pkg = pkgPrefix + ".x509";
-      String certAndKeyGen;
-      if (pkgPrefix.equals(IBM_SEC)
-          || System.getProperty("java.version").matches("^1\\.[67]\\..*"))
+      String certAndKeyGen = getCertAndKeyGenClassName();
+      if(certAndKeyGen == null)
       {
-        certAndKeyGen = x509pkg + ".CertAndKeyGen";
+        Message msg = ERR_CERTMGR_CERTGEN_NOT_FOUND.get(CERTANDKEYGEN_PROVIDER);
+        throw new ExceptionInInitializerError(msg.toString());
       }
-      else
-      { // Java 8 moved the CertAndKeyGen class to sun.security.tools.keytool
-        certAndKeyGen = pkgPrefix + ".tools.keytool" + ".CertAndKeyGen";
-      }
-      String X500Name = x509pkg + ".X500Name";
+
+      String X500Name = pkgPrefix + ".x509.X500Name";
       try
       {
         certKeyGenClass = Class.forName(certAndKeyGen);
@@ -148,7 +155,46 @@ public final class Platform
       }
     }
 
+    /**
+     * Try to decide which CertAndKeyGen class to use.
+     *
+     * @return a fully qualified class name or null
+     */
+    private static String getCertAndKeyGenClassName() {
+      String certAndKeyGen = System.getProperty(CERTANDKEYGEN_PROVIDER);
+      if (certAndKeyGen != null)
+      {
+        return certAndKeyGen;
+      }
 
+      for (String className : CERTANDKEYGEN_PATHS)
+      {
+        if (classExists(className))
+        {
+          return className;
+        }
+      }
+      return null;
+    }
+
+    /**
+     * A quick check to see if a class can be loaded. Doesn't check if
+     * it can be instantiated.
+     *
+     * @param className full class name to check
+     * @return true if the class is found
+     */
+    private static boolean classExists(final String className)
+    {
+      try {
+        Class clazz = Class.forName(className);
+        return true;
+      } catch (ClassNotFoundException e) {
+        return false;
+      } catch (ClassCastException e) {
+        return false;
+      }
+    }
 
     protected PlatformIMPL()
     {
