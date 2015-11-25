@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2009 Sun Microsystems, Inc.
- *      Portions Copyright 2013 ForgeRock AS
+ *      Portions Copyright 2013-2015 ForgeRock AS
  */
 package org.opends.server.tasks;
 import org.opends.messages.Message;
@@ -313,12 +313,13 @@ public class ImportTask extends Task
         {
           s = f.getAbsolutePath();
         }
-        ldifFiles.add(s);
       }
-      else
+      if (!f.canRead())
       {
-        ldifFiles.add(s);
+        Message message = ERR_LDIFIMPORT_LDIF_FILE_DOESNT_EXIST.get(s);
+        throw new DirectoryException(ResultCode.UNWILLING_TO_PERFORM, message);
       }
+      ldifFiles.add(s);
     }
 
     attrList = taskEntry.getAttribute(typeTemplateFile);
