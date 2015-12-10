@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2010-2013 ForgeRock AS.
+ *      Portions Copyright 2010-2015 ForgeRock AS.
  */
 package org.opends.server.protocols.ldap;
 
@@ -999,15 +999,24 @@ public final class LDAPClientConnection extends ClientConnection implements
         statTracker.updateMessageWritten(message);
       }
     }
+    catch (ClosedChannelException e)
+    {
+      if (debugEnabled())
+      {
+        TRACER.debugCaught(DebugLogLevel.ERROR, e);
+      }
+      disconnect(DisconnectReason.IO_ERROR, false,
+          ERR_IO_ERROR_ON_CLIENT_CONNECTION.get(getExceptionMessage(e)));
+      return;
+    }
     catch (Exception e)
     {
       if (debugEnabled())
       {
         TRACER.debugCaught(DebugLogLevel.ERROR, e);
       }
-
-      // FIXME -- Log a message or something
-      disconnect(DisconnectReason.SERVER_ERROR, false, null);
+      disconnect(DisconnectReason.SERVER_ERROR, false,
+          ERR_UNEXPECTED_EXCEPTION_ON_CLIENT_CONNECTION.get(getExceptionMessage(e)));
       return;
     }
     finally
