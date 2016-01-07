@@ -23,12 +23,13 @@
  *
  *
  *      Copyright 2006-2008 Sun Microsystems, Inc.
+ *      Portions Copyright 2016 ForgeRock AS
  */
 package org.opends.server.types;
 import org.opends.messages.Message;
 
 
-
+import java.security.SecureRandom;
 import java.util.Random;
 import java.util.SortedSet;
 
@@ -78,7 +79,7 @@ public final class NamedCharacterSet
     this.name       = name;
     this.characters = characters;
 
-    random     = new Random();
+    random     = new SecureRandom();
 
     if ((name == null) || (name.length() == 0))
     {
