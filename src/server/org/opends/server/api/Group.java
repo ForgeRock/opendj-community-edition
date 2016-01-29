@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2012 ForgeRock AS
+ *      Portions Copyright 2011-2016 ForgeRock AS
  */
 package org.opends.server.api;
 import org.opends.messages.Message;
@@ -41,6 +41,7 @@ import org.opends.server.types.DN;
 import org.opends.server.types.Entry;
 import org.opends.server.types.InitializationException;
 import org.opends.server.types.MemberList;
+import org.opends.server.types.Modification;
 import org.opends.server.types.SearchFilter;
 import org.opends.server.types.SearchScope;
 
@@ -240,6 +241,21 @@ public abstract class Group<T extends GroupImplementationCfg>
    *          should be considered members of this group.
    */
   public abstract List<DN> getNestedGroupDNs();
+
+
+
+  /**
+   * Attempt to make multiple changes to the group's member list.
+   *
+   * @param  modifications  The list of modifications being made to the group,
+   *                        which may include changes to non-member attributes.
+   * @throws  UnsupportedOperationException  If this group does not support
+   *                                         altering the member list.
+   * @throws  DirectoryException  If a problem occurs while attempting to
+   *                              update the members.
+   */
+  public abstract void updateMembers(List<Modification> modifications)
+         throws UnsupportedOperationException, DirectoryException;
 
 
 

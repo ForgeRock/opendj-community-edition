@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
+ *      Portions Copyright 2016 ForgeRock AS
  */
 package org.opends.server.extensions;
 
@@ -47,6 +48,7 @@ import org.opends.server.types.DN;
 import org.opends.server.types.Entry;
 import org.opends.server.types.InitializationException;
 import org.opends.server.types.MemberList;
+import org.opends.server.types.Modification;
 import org.opends.server.types.ObjectClass;
 import org.opends.server.types.ResultCode;
 import org.opends.server.types.SearchFilter;
@@ -446,6 +448,21 @@ public class VirtualStaticGroup
   public boolean mayAlterMemberList()
   {
     return false;
+  }
+
+
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override()
+  public void updateMembers(List<Modification> modifications)
+          throws UnsupportedOperationException, DirectoryException
+  {
+    // Virtual static groups don't support altering the member list.
+    Message message = ERR_VIRTUAL_STATIC_GROUP_ALTERING_MEMBERS_NOT_SUPPORTED.
+            get(String.valueOf(groupEntryDN));
+    throw new UnsupportedOperationException(message.toString());
   }
 
 

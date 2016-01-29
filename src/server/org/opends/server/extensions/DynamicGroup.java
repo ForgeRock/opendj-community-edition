@@ -23,6 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
+ *      Portions Copyright 2016 ForgeRock AS
  */
 package org.opends.server.extensions;
 
@@ -51,6 +52,7 @@ import org.opends.server.types.Entry;
 import org.opends.server.types.InitializationException;
 import org.opends.server.types.LDAPURL;
 import org.opends.server.types.MemberList;
+import org.opends.server.types.Modification;
 import org.opends.server.types.ObjectClass;
 import org.opends.server.types.SearchFilter;
 import org.opends.server.types.SearchScope;
@@ -390,6 +392,19 @@ public class DynamicGroup
   public boolean mayAlterMemberList()
   {
     return false;
+  }
+
+
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override()
+  public void updateMembers(List<Modification> modifications)
+  {
+    // Dynamic groups don't support altering the member list.
+    Message message = ERR_DYNAMICGROUP_ALTERING_MEMBERS_NOT_SUPPORTED.get();
+    throw new UnsupportedOperationException(message.toString());
   }
 
 
