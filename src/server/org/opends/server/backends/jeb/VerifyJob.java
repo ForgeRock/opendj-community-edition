@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2006-2010 Sun Microsystems, Inc.
- *      Portions copyright 2011-2012 ForgeRock AS
+ *      Portions copyright 2011-2016 ForgeRock AS
  */
 package org.opends.server.backends.jeb;
 import com.sleepycat.je.*;
@@ -1885,7 +1885,7 @@ public class VerifyJob
               }
               else if (cr == ConditionResult.UNDEFINED)
               {
-                incrEntryLimitStats(orderingIndex, normalizedBytes);
+                incrEntryLimitStats(approximateIndex, normalizedBytes);
               }
             }
             catch (DatabaseException e)
