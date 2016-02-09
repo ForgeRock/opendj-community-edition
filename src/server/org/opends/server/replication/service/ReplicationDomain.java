@@ -23,7 +23,7 @@
  *
  *
  *      Copyright 2008-2010 Sun Microsystems, Inc.
- *      Portions Copyright 2011-2014 ForgeRock AS
+ *      Portions Copyright 2011-2016 ForgeRock AS
  */
 package org.opends.server.replication.service;
 
@@ -3021,6 +3021,10 @@ public abstract class ReplicationDomain
   {
     synchronized (sessionLock)
     {
+      if (listenerThread == null) {
+        return;
+      }
+
       /*
       Stop the broker first in order to prevent the listener from
       reconnecting - see OPENDJ-457.
@@ -3056,6 +3060,10 @@ public abstract class ReplicationDomain
   {
     synchronized (sessionLock)
     {
+      if (listenerThread != null) {
+        return;
+      }
+
       broker.start();
 
       // Create the listener thread
