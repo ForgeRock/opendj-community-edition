@@ -639,7 +639,6 @@ public class StaticGroup
           }
           memberDNs = newMemberDNs;
         }
-        LinkedList<DN> newNestedGroups = new LinkedList<DN>();
         nestedGroups.clear();
         for (ByteString dnString : memberDNs)
         {
@@ -651,7 +650,6 @@ public class StaticGroup
           }
         }
         nestedGroupRefreshToken = DirectoryServer.getGroupManager().refreshToken();
-        nestedGroups = newNestedGroups;
       }
       finally
       {
