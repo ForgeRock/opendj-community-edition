@@ -41,6 +41,7 @@
   </parent>
   <artifactId>opendj-server</artifactId>
   <packaging>pom</packaging>
+  <groupId>org.forgerock.opendj-ce</groupId>
   <name>OpenDJ Directory Server</name>
   <version>2.6.4-SNAPSHOT</version>
   <description>

@@ -1,8 +1,8 @@
 # The official full product name for the Directory Server.
-PRODUCT_NAME=OpenDJ
+PRODUCT_NAME=OpenDJ Community Edition
 
 # The short name that should be used if the full name is not appropriate.
-SHORT_NAME=OpenDJ
+SHORT_NAME=OpenDJ-CE
 
 # The short name that should be used in packages.
 PKG_NAME=opendj
