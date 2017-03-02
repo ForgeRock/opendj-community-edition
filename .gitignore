@@ -1,0 +1,11 @@
+.checkstyle-cache/
+ext/ivy.jar
+src/svr4/OpenDJ-CE
+build/
+lib/bundle/
+lib/jar/
+lib/javadoc/
+lib/source/
+src/admin/generated/
+src/messages/generated/
+src/server/org/opends/server/util/DynamicConstants.java

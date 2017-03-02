@@ -35,6 +35,7 @@
     <version>2.6.1</version>
   </parent>
   <artifactId>opendj-server</artifactId>
+  <groupId>org.forgerock.opendj-ce</groupId>
   <version>2.6.1</version>
   <name>OpenDJ Directory Server</name>
   <description>
