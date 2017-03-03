@@ -2,7 +2,7 @@
 PRODUCT_NAME=OpenDJ Community Edition
 
 # The short name that should be used if the full name is not appropriate.
-SHORT_NAME=OpenDJ-CE
+SHORT_NAME=OpenDJ
 
 # The short name that should be used in packages.
 PKG_NAME=opendj
