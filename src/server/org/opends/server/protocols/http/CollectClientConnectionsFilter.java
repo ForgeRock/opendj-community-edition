@@ -39,7 +39,6 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 
 import org.forgerock.json.resource.ResourceException;
-import org.forgerock.opendj.adapter.server2x.Adapters;
 import org.forgerock.opendj.ldap.*;
 import org.forgerock.opendj.ldap.Filter;
 import org.forgerock.opendj.ldap.requests.BindRequest;
@@ -50,6 +49,7 @@ import org.forgerock.opendj.ldap.responses.SearchResultEntry;
 import org.forgerock.opendj.rest2ldap.Rest2LDAP;
 import org.forgerock.opendj.rest2ldap.servlet.Rest2LDAPContextFactory;
 import org.opends.messages.Message;
+import org.opends.server.adapter.server2x.Adapters;
 import org.opends.server.admin.std.server.ConnectionHandlerCfg;
 import org.opends.server.loggers.debug.DebugTracer;
 import org.opends.server.schema.SchemaConstants;

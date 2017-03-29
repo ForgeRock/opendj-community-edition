@@ -27,12 +27,16 @@
  ! -->
 <ivy-settings>
   <settings defaultResolver="main" />
+  <credentials host="maven.forgerock.org"
+               realm="Artifactory Realm"
+               username="${frrepo.username}"
+               passwd="${frrepo.password}"/>
   <resolvers>
     <chain name="main" checkmodified="${ivy.checkmodified}" changingPattern="${ivy.changingpattern}">
       <!-- for forgerock dependencies -->
       <ibiblio name="forgerock"
                m2compatible="true"
-               root="http://maven.forgerock.org/repo/repo"
+               root="http://maven.forgerock.org/repo/community"
                checkmodified="${ivy.checkmodified}"
                changingPattern="${ivy.changingpattern}"
                />

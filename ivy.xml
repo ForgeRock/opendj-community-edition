@@ -37,7 +37,7 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="http://incubator.apache.org/ivy/schemas/ivy.xsd">
 
-  <info organisation="org.forgerock" module="opendj-community-edition" branch="b2.6">
+  <info organisation="org.forgerock.ce" module="opendj-community-edition" branch="b2.6">
     <license     name="CDDL v1.0"    url="http://forgerock.org/license/CDDLv1.0.html" />
     <ivyauthor   name="ForgeRock AS" url="http://forgerock.com" />
     <description homepage="http://opendj.forgerock.org/" />
@@ -50,11 +50,11 @@
     <!-- subsequent versions are not compatible with java 6, so force to use this version only -->
     <dependency org="javax.servlet"         name="javax.servlet-api"        rev="[3.1-b02]" />
     <dependency org="com.sleepycat"         name="je"                       rev="5.0.104" />
-    <dependency org="org.forgerock.opendj"  name="opendj-rest2ldap-servlet" rev="&opendj.sdk.version;" />
-    <dependency org="org.forgerock.opendj"  name="opendj-server2x-adapter"  rev="&opendj.sdk.version;">
+    <dependency org="org.forgerock.ce.opendj"  name="opendj-rest2ldap-servlet" rev="&opendj.sdk.version;" />
+    <!-- <dependency org="org.forgerock.ce.opendj"  name="opendj-server2x-adapter"  rev="&opendj.sdk.version;"> -->
       <!-- This is the OpenDJ server module :) -->
-      <exclude  module="opendj-server"/>
-    </dependency>
+    <!--  <exclude  module="opendj-server"/> -->
+    <!-- </dependency> -->
     <dependency org="org.glassfish.grizzly" name="grizzly-http-servlet"     rev="&grizzly.version;">
       <exclude module="javax.servlet-api" />
     </dependency>

@@ -32,8 +32,8 @@
 
  <parent>
   <artifactId>opendj-server</artifactId>
-  <groupId>org.forgerock.opendj-ce</groupId>
-  <version>2.6.4-SNAPSHOT</version>
+  <groupId>org.forgerock.ce.opendj</groupId>
+  <version>2.6.4</version>
  </parent>
 
  <artifactId>opendj-log-ref</artifactId>
