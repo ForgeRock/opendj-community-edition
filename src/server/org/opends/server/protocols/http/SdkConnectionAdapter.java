@@ -26,7 +26,7 @@
  */
 package org.opends.server.protocols.http;
 
-import static org.forgerock.opendj.adapter.server2x.Converters.*;
+import static org.opends.server.adapter.server2x.Converters.*;
 import static org.forgerock.opendj.ldap.ByteString.*;
 import static org.opends.server.loggers.debug.DebugLogger.*;
 
