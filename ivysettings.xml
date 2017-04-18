@@ -27,10 +27,10 @@
  ! -->
 <ivy-settings>
   <settings defaultResolver="main" />
-  <credentials host="maven.forgerock.org"
+  <!-- <credentials host="maven.forgerock.org"
                realm="Artifactory Realm"
                username="${frrepo.username}"
-               passwd="${frrepo.password}"/>
+               passwd="${frrepo.password}"/> -->
   <resolvers>
     <chain name="main" checkmodified="${ivy.checkmodified}" changingPattern="${ivy.changingpattern}">
       <!-- for nearly everything else -->
