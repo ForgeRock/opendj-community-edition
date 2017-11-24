@@ -215,7 +215,7 @@
        compilation. -->
   <presetdef name="javac">
     <javac optimize="true" includeantruntime="false"
-           source="1.6" target="1.6"
+           source="1.7" target="1.7"
         debug="on" debuglevel="${build.debuglevel}"
         deprecation="true" fork="true"
         memoryInitialSize="${MEM}" memoryMaximumSize="${MEM}">
@@ -478,7 +478,7 @@ Please:
   <target name="validjavaversion"
           depends="buildtools" >
 
-    <property name="min.java.version" value="1.6.0_10" />
+    <property name="min.java.version" value="1.7.0_10" />
 
     <typedef name="validjavaversion"
              classname="org.opends.build.tools.ValidJavaVersion" >
