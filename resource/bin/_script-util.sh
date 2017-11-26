@@ -30,7 +30,7 @@
 # Display an error message
 #
 display_java_not_found_error() {
-  echo "Please set OPENDJ_JAVA_HOME to the root of a Java 6 update 10 (or higher) installation"
+  echo "Please set OPENDJ_JAVA_HOME to the root of a Java 7 (or higher) installation"
   echo "or edit the java.properties file and then run the dsjavaproperties script to"
   echo "specify the Java version to be used"
 }
@@ -191,11 +191,11 @@ test_java() {
       echo "ERROR:  The detected Java version could not be used.  The detected"
       echo "Java binary is:"
       echo "${OPENDJ_JAVA_BIN}"
-      echo "You must specify the path to a valid Java 6.0 update 10 or higher version."
+      echo "You must specify the path to a valid Java 7 or higher version."
       echo "The procedure to follow is:"
       echo "1. Delete the file ${INSTANCE_ROOT}/lib/set-java-home" if it exists.
       echo "2. Set the environment variable OPENDJ_JAVA_HOME to the root of a valid "
-      echo "Java 6.0 installation."
+      echo "Java 7 installation."
       echo "If you want to have specific Java settings for each command line you must"
       echo "follow the steps 3 and 4."
       echo "3. Edit the properties file specifying the Java binary and the Java arguments"
@@ -219,11 +219,11 @@ test_java() {
       echo "arguments ${OPENDJ_JAVA_ARGS}."
       echo "The detected Java binary is:"
       echo "${OPENDJ_JAVA_BIN}"
-      echo "You must specify the path to a valid Java 6.0 update 10 or higher version."
+      echo "You must specify the path to a valid Java 7 or higher version."
       echo "The procedure to follow is:"
       echo "1. Delete the file ${INSTANCE_ROOT}/lib/set-java-home" if it exists.
       echo "2. Set the environment variable OPENDJ_JAVA_HOME to the root of a valid "
-      echo "Java 6.0 installation."
+      echo "Java 7 installation."
       echo "If you want to have specific Java settings for each command line you must"
       echo "follow the steps 3 and 4."
       echo "3. Edit the properties file specifying the Java binary and the Java arguments"

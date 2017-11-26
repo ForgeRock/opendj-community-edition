@@ -677,19 +677,19 @@ public class JavaPropertiesTool extends ConsoleApplication
           "            then"+EOL+
           "              export OPENDJ_JAVA_BIN"+EOL+
           "            else"+EOL+
-          "              echo \"You must specify the path to a valid Java 6.0 "+
+          "              echo \"You must specify the path to a valid Java 7 "+
           "or higher version in the\""+EOL+
           "              echo \"properties file and then run the "+
           "dsjavaproperties  tool. \""+EOL+
           "              echo \"The procedure to follow is:\""+EOL+
-          "              echo \"You must specify the path to a valid Java 6.0 "+
+          "              echo \"You must specify the path to a valid Java 7 "+
           "or higher version.  The \""+EOL+
           "              echo \"procedure to follow is:\""+EOL+
           "              echo \"1. Delete the file "+
           "${INSTANCE_ROOT}/lib/set-java-home\""+EOL+
           "              echo \"2. Set the environment variable "+
           "OPENDJ_JAVA_HOME to the root of a valid \""+EOL+
-          "              echo \"Java 6.0 installation.\""+EOL+
+          "              echo \"Java 7 installation.\""+EOL+
           "              echo \"If you want to have specificjava  settings for"+
           " each command line you must\""+EOL+
           "              echo \"follow the steps 3 and 4\""+EOL+
