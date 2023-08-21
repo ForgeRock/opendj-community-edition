@@ -101,9 +101,9 @@ public final class Platform
   {
 
     // Key size, key algorithm and signature algorithms used.
-    private static final int KEY_SIZE = 1024;
+    private static final int KEY_SIZE = 2048;
     private static final String KEY_ALGORITHM = "rsa";
-    private static final String SIG_ALGORITHM = "SHA1WithRSA";
+    private static final String SIG_ALGORITHM = "SHA256WithRSA";
 
     // Time values used in validity calculations.
     private static final int SEC_IN_DAY = 24 * 60 * 60;
