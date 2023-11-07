@@ -1335,8 +1335,8 @@ public class ConfigureDS
   {
     final String[] preferredAlternativeCiphers =
     {
-        "RSA/ECB/OAEPWITHSHA1ANDMGF1PADDING",
-        "RSA/ECB/PKCS1Padding"
+        "AES_256/GCM/NoPadding",
+        "ChaCha20-Poly1305"
     };
     String alternativeCipher = null;
     for (String cipher : preferredAlternativeCiphers)

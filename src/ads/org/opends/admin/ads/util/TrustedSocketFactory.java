@@ -279,7 +279,7 @@ public class TrustedSocketFactory extends SSLSocketFactory
   private SSLSocketFactory getInnerFactory() throws IOException {
     if (innerFactory == null)
     {
-      String algorithm = "TLSv1";
+      String algorithm = "TLSv1.2";
       SSLKeyException xx;
       KeyManager[] km = null;
       TrustManager[] tm = null;

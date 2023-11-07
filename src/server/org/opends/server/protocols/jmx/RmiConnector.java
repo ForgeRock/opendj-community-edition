@@ -329,7 +329,7 @@ public class RmiConnector
           }
         }
 
-        SSLContext ctx = SSLContext.getInstance("TLSv1");
+        SSLContext ctx = SSLContext.getInstance("TLSv1.2");
         ctx.init(
             keyManagers,
             null,
